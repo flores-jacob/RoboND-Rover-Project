@@ -91,6 +91,99 @@ def perspect_transform(img, src, dst):
     return warped
 
 
+# def get_wall_outlines(overhead_map):
+#     """
+#     This function takes an overhead map in the form of a numpy array, with elements with positive values as
+#     traversable areas.  It returns an array with simply the wall outlines of the map.
+#     :param overhead_map:
+#     :return:
+#     """
+#     pass
+
+
+def get_wall_outlines(rover_coords_x, rover_coords_y, look_forward=0):
+    """
+    This function takes an x and y coordinates of the rover in the forms of numpy arrays, with elements with positive
+    values as traversable areas.  It returns arrays of the walls on the left and the right of the rover
+    :param rover_coords_x:
+    :param rover_coords_y:
+    :return:
+    """
+    # get max y values for left side wall
+    # get min y values for right side wall
+    # problem here would be outlier specks which will distort the wall outline
+
+
+    # I'm not yet that experienced with matrix manipulation, as such, I'll have to make do with a for loop
+    # To speed the code up, it may be best to simply process the first few wall points closest to the rover
+    # instead of processing the wall for the entire image
+
+    xy_coords = np.stack((rover_coords_x, rover_coords_y), axis=1)
+
+    # xy_coords is ordered starting from the highest x values, to the lowest. We flip it to order it from
+    # lowest to highest, to make working with it more intuitive, solution taken from
+    # https://stackoverflow.com/a/24813184
+
+    xy_coords = np.flipud(xy_coords)
+
+    # get all the unique values of X
+    x_uniques = np.unique(rover_coords_x)
+
+    # for each x value, get the max and min y value
+    # save these values onto 2 separate arrays, or maybe we could save these onto a single array
+
+    # initialize the array for the x coords and their respective maximum and minimum values
+    xy_coords_with_max_y = np.zeros((len(x_uniques), 2))
+    xy_coords_with_min_y = np.zeros((len(x_uniques), 2))
+
+    print(len(x_uniques))
+
+    if look_forward == 0:
+        wall_predict = len(x_uniques)
+    else:
+        wall_predict = look_forward
+    # for each x value, get all points with that x value and its respective y values
+    # maybe we can also just use the nearest 10 or 20 points to speed up processing
+    for x_index in range(wall_predict):
+        x_value = x_uniques[x_index]
+        # filter all coords, take only the current x_value in question
+        ys_of_x = xy_coords[:, 0] == x_value
+        ys_of_x_values = xy_coords[ys_of_x]
+
+        # get max y value for the particular x value
+        row_max = np.argmax(ys_of_x_values[:, 1])
+        x_with_max_y = ys_of_x_values[row_max, :]
+
+        # get min y value for the particular x value
+        row_min = np.argmin(ys_of_x_values[:, 1])
+        x_with_min_y = ys_of_x_values[row_min, :]
+
+        # insert this set of coords on the array of coords with max y values
+        xy_coords_with_max_y[x_index] = x_with_max_y
+        xy_coords_with_min_y[x_index] = x_with_min_y
+    # print(ys_of_x_values)
+    #         print(x_with_max_y)
+    #         print(x_with_min_y)
+
+    #         savgol = savgol_filter(xy_coords_with_max_y[:, 1], 5, 2)
+    #         plt.plot(xy_coords_with_max_y[:, 0], savgol, '.')
+
+    #         x_new = np.linspace(xy_coords_with_max_y[:, 0].min(), xy_coords_with_max_y[:, 0].max(), 100)
+    #         power_smooth = spline(xy_coords_with_max_y[:, 0], xy_coords_with_max_y[:, 1], x_new)
+    #         plt.plot(x_new, power_smooth)
+
+    #         tck = interpolate.splrep(xy_coords_with_max_y[:, 0], xy_coords_with_max_y[:, 1], k=5, s=1000)
+    #         plt.plot(tck)
+    #         f = interpolate.interp1d(xy_coords_with_max_y[:, 0], xy_coords_with_max_y[:, 1])
+    #         ynew = f(xy_coords_with_max_y[:, 0])   # use interpolation function returned by `interp1d`
+    #         plt.plot(xy_coords_with_max_y[:, 0], ynew, '-')
+
+    left_wall_coords = xy_coords_with_max_y
+    right_wall_coords = xy_coords_with_min_y
+
+    return left_wall_coords, right_wall_coords
+
+
 # Apply the above functions in succession and update the Rover state accordingly
 def perception_step(Rover):
     # Perform perception steps to update Rover()
