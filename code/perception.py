@@ -209,23 +209,26 @@ def front_obstacle_coords(rover_coords_x, rover_coords_y, look_forward=25):
 
 def get_surrounding_pixel_types(rover_x_pos, rover_y_pos, memory_map_single_layer):
 
+    # offset is the number of pixels * 10 from the origin
+    offset = 2 * 10
+
     # note that the x,y coordinate order is inversed.  This is because the first value accesses the
     # row values or m for the y values, and the x values are in the columns
-    north_pixel = memory_map_single_layer[rover_y_pos + 1, rover_x_pos]
-    south_pixel = memory_map_single_layer[rover_y_pos - 1, rover_x_pos]
-    east_pixel = memory_map_single_layer[rover_y_pos, rover_x_pos + 1]
-    west_pixel = memory_map_single_layer[rover_y_pos, rover_x_pos - 1]
+    north_pixel = memory_map_single_layer[rover_y_pos + offset, rover_x_pos]
+    south_pixel = memory_map_single_layer[rover_y_pos - offset, rover_x_pos]
+    east_pixel = memory_map_single_layer[rover_y_pos, rover_x_pos + offset]
+    west_pixel = memory_map_single_layer[rover_y_pos, rover_x_pos - offset]
 
-    northwest_pixel = memory_map_single_layer[rover_y_pos + 1, rover_x_pos - 1]
-    northeast_pixel = memory_map_single_layer[rover_y_pos + 1, rover_x_pos + 1]
-    southwest_pixel = memory_map_single_layer[rover_y_pos - 1, rover_x_pos - 1]
-    southeast_pixel = memory_map_single_layer[rover_y_pos - 1, rover_x_pos + 1]
+    northwest_pixel = memory_map_single_layer[rover_y_pos + offset, rover_x_pos - offset]
+    northeast_pixel = memory_map_single_layer[rover_y_pos + offset, rover_x_pos + offset]
+    southwest_pixel = memory_map_single_layer[rover_y_pos - offset, rover_x_pos - offset]
+    southeast_pixel = memory_map_single_layer[rover_y_pos - offset, rover_x_pos + offset]
 
     origin = memory_map_single_layer[rover_y_pos, rover_x_pos]
 
-    surrounding_pixels = [[northwest_pixel, north_pixel, northeast_pixel],
+    surrounding_pixels = np.asarray([[northwest_pixel, north_pixel, northeast_pixel],
                           [west_pixel, origin, east_pixel],
-                          [southwest_pixel, south_pixel, southeast_pixel]]
+                          [southwest_pixel, south_pixel, southeast_pixel]])
 
     return surrounding_pixels
 
@@ -239,18 +242,15 @@ def identify_surrounding_pixels(rover_x_pos, rover_y_pos, memory_map):
 
     for i in range(0, 3):
         for j in range(0, 3):
-            # if surrounding_obstacle_pixels[i][j] > 0:
-            #     pass
-                # print("navigable ij", surrounding_navigable_pixels[i][j])
-                # print(" rock sample", surrounding_rock_sample_pixels[i][j])
-                # surrounding_pixels[i][j] = 0  # zeros are obstacle pixels
-            # elif surrounding_rock_sample_pixels[i][j] > 0:
+            # Use 5, 6, 7 to avoid confusion with the use of 0, 1, 2, and 3 in other parts of code
+            if surrounding_obstacle_pixels[i][j] > 0:
+                surrounding_pixels[i][j] = 5  # fives are obstacle pixels
             if surrounding_rock_sample_pixels[i][j] > 0:
-                surrounding_pixels[i][j] = 1  # ones are rock sample pixels
+                surrounding_pixels[i][j] = 6  # sixs are rock sample pixels
             elif surrounding_navigable_pixels[i][j] > 0:
-                surrounding_pixels[i][j] = 2  # twos are navigable pixels
-            else:
-                surrounding_pixels[i][j] = 3  # threes are unexplored pixels
+                surrounding_pixels[i][j] = 7  # sevens are navigable pixels
+            # else:
+            #     surrounding_pixels[i][j] = 3  # threes are unexplored pixels
 
     return surrounding_pixels
 
@@ -359,6 +359,15 @@ def perception_step(Rover):
     Rover.memory_map[rock_sample_y_memory, rock_sample_x_memory, 1] = 255
     Rover.memory_map[navigable_y_memory, navigable_x_memory, 2] = 255
 
+    # where nav_terrain = 255 and obstacle_terrain = 255 set obstacle_terrain to zero
+    # this is to prevent shadows of obstacle terrain from conflicting with navigable terrain
+    navigable_terrain = np.where(Rover.memory_map[:, :, 2] == 255)
+    Rover.memory_map[:, :, 0][navigable_terrain] = 0
+
+    # result = (identify_surrounding_pixels(int(round((Rover.pos[0]) * 10)), int(round(Rover.pos[1] * 10)), Rover.memory_map))
+
+    # print(result)
+
     # 8) Convert rover-centric pixel positions to polar coordinates
     # Update Rover pixel distances and angles
     # Rover.nav_dists = rover_centric_pixel_distances
@@ -390,10 +399,10 @@ def perception_step(Rover):
 
     print("Rover pos ", Rover.pos)
 
-    result = (identify_surrounding_pixels(int(round((Rover.pos[0]) * 10)), int(round(Rover.pos[1] * 10)), Rover.memory_map))
+    # result = (identify_surrounding_pixels(int(round((Rover.pos[0]) * 10)), int(round(Rover.pos[1] * 10)), Rover.memory_map))
 
 
-    print (result)
+    # print (result)
 
     # Rover.angle_to_min_obstacle_distance = angle_to_min_obstacle_distance * 180 / np.pi
     # Rover.steer = steering
