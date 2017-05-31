@@ -111,16 +111,6 @@ def perspect_transform(img, src, dst):
     return warped
 
 
-# def get_wall_outlines(overhead_map):
-#     """
-#     This function takes an overhead map in the form of a numpy array, with elements with positive values as
-#     traversable areas.  It returns an array with simply the wall outlines of the map.
-#     :param overhead_map:
-#     :return:
-#     """
-#     pass
-
-
 def get_side_wall_outlines(rover_coords_x, rover_coords_y, look_forward=0):
     """
     This function takes an x and y coordinates of the rover in the forms of numpy arrays, with elements with positive
@@ -156,7 +146,7 @@ def get_side_wall_outlines(rover_coords_x, rover_coords_y, look_forward=0):
     xy_coords_with_max_y = np.zeros((len(x_uniques), 2))
     xy_coords_with_min_y = np.zeros((len(x_uniques), 2))
 
-    print(len(x_uniques))
+    # print(len(x_uniques))
 
     if (look_forward == 0) or (len(x_uniques) < look_forward):
         wall_predict = len(x_uniques)
@@ -202,13 +192,12 @@ def front_obstacle_coords(rover_coords_x, rover_coords_y, look_forward=25):
     obstacle_coords_indices = (xy_coords[:, 1] == (0 | 1 | -1)) & (
         (xy_coords[:, 0] <= look_forward) & (xy_coords[:, 0] > 15))
     obstacle_coords = xy_coords[obstacle_coords_indices]
-    print("obstacle coords ", obstacle_coords)
+    # print("obstacle coords ", obstacle_coords)
 
     return obstacle_coords
 
 
 def get_surrounding_pixel_types(rover_x_pos, rover_y_pos, memory_map_single_layer):
-
     # offset is the number of pixels * 10 from the origin
     offset = 2 * 10
 
@@ -227,8 +216,8 @@ def get_surrounding_pixel_types(rover_x_pos, rover_y_pos, memory_map_single_laye
     origin = memory_map_single_layer[rover_y_pos, rover_x_pos]
 
     surrounding_pixels = np.asarray([[northwest_pixel, north_pixel, northeast_pixel],
-                          [west_pixel, origin, east_pixel],
-                          [southwest_pixel, south_pixel, southeast_pixel]])
+                                     [west_pixel, origin, east_pixel],
+                                     [southwest_pixel, south_pixel, southeast_pixel]])
 
     return surrounding_pixels
 
@@ -249,10 +238,94 @@ def identify_surrounding_pixels(rover_x_pos, rover_y_pos, memory_map):
                 surrounding_pixels[i][j] = 6  # sixs are rock sample pixels
             elif surrounding_navigable_pixels[i][j] > 0:
                 surrounding_pixels[i][j] = 7  # sevens are navigable pixels
-            # else:
-            #     surrounding_pixels[i][j] = 3  # threes are unexplored pixels
+                # else:
+                #     surrounding_pixels[i][j] = 3  # threes are unexplored pixels
 
     return surrounding_pixels
+
+
+def vicinity_sampler(memory_xpos, memory_ypos, yaw, memory_map, orientation=0):
+    """
+    get a box of memory pixel points from the memory map
+    :param memory_xpos:
+    :param memory_ypos:
+    :param yaw:
+    :param memory_map: Entire memory map with all its layers
+    :param orientation: 0 for box in front of rover
+                        1 for box on the left of rover
+                        2 for box on the right of rover
+                        3 for the upper left of rover
+                        4 for the upper right of rover
+    :return: returns multilayered memory pixels from memory_map
+    """
+    # offset is the number of memory_pixel from rover 10 memory pixels = 1 worldmap pixel
+
+    if orientation == 1:
+        yaw_offset = 90
+    elif orientation == 2:
+        yaw_offset = -90
+    elif orientation == 3:
+        yaw_offset = 45
+    elif orientation == 4:
+        yaw_offset = -45
+    else:
+        yaw_offset = 0
+
+    offset = 6
+    box_size = 20
+
+    x = memory_xpos
+    y = memory_ypos
+
+    leftmost_x_adjust = offset
+    bottom_y_adjust = -box_size / 2
+    rotated_leftmost_x_adjust, rotated_bottom_y_adjust = rotate_pix(leftmost_x_adjust, bottom_y_adjust, yaw + yaw_offset)
+
+    topmost_y_adjust = box_size / 2
+    rightmost_x_adjust = offset + box_size
+    rotated_righmost_x_adjust, rotated_topmost_y_adjust = rotate_pix(rightmost_x_adjust, topmost_y_adjust, yaw + yaw_offset)
+
+    # print("bottomy", rotated_bottom_y_adjust)
+    # print("topy   ", rotated_topmost_y_adjust)
+    # print("lefx   ", rotated_leftmost_x_adjust)
+    # print("righx  ", rotated_righmost_x_adjust)
+
+    lower_y = min([y + rotated_bottom_y_adjust, y + rotated_topmost_y_adjust])
+    higher_y = max([y + rotated_bottom_y_adjust, y + rotated_topmost_y_adjust])
+
+    lower_x = min([x + rotated_leftmost_x_adjust, x + rotated_righmost_x_adjust])
+    higher_x = max([x + rotated_leftmost_x_adjust, x + rotated_righmost_x_adjust])
+
+    # print("range ", lower_y, ":", higher_y)
+    # print("range ", lower_x, ":", higher_x)
+
+    # slice the array of pixels from the memory_map
+    vicinity_array = memory_map[
+                     int(round(lower_y)):int(round(higher_y)),
+                     int(round(lower_x)): int(round(higher_x)),
+                     :
+                     ]
+    # slice the array of pixels from the memory_map
+    # vicinity_array = memory_map_layer[
+    #                  bottom_y_adjust:topmost_y_adjust,
+    #                  leftmost_x_adjust: rightmost_x_adjust
+    #                  ]
+    # print("shape ", vicinity_array.shape)
+
+    return vicinity_array
+
+
+def obstacle_detected(vicinity_array):
+    obstacle_count = np.count_nonzero(vicinity_array[:, :, 0])
+    # rock_sample_count = np.count_nonzero(vicinity_array[:,:,1])
+    navigable_terrain_count = np.count_nonzero(vicinity_array[:, :, 2])
+
+    if obstacle_count > navigable_terrain_count:
+        obstacles_present = True
+    else:
+        obstacles_present = False
+
+    return obstacles_present
 
 
 # Apply the above functions in succession and update the Rover state accordingly
@@ -336,7 +409,8 @@ def perception_step(Rover):
                                                         Rover.pos[1] * 10, Rover.yaw,
                                                         Rover.memory_map.shape[0], memory_scale)
 
-    rock_sample_x_memory, rock_sample_y_memory = pix_to_world(rock_sample_xpix * 10, rock_sample_ypix * 10, Rover.pos[0] * 10,
+    rock_sample_x_memory, rock_sample_y_memory = pix_to_world(rock_sample_xpix * 10, rock_sample_ypix * 10,
+                                                              Rover.pos[0] * 10,
                                                               Rover.pos[1] * 10, Rover.yaw,
                                                               Rover.memory_map.shape[0], memory_scale)
 
@@ -361,11 +435,11 @@ def perception_step(Rover):
 
     # where nav_terrain = 255 and obstacle_terrain = 255 set obstacle_terrain to zero
     # this is to prevent shadows of obstacle terrain from conflicting with navigable terrain
-    navigable_terrain = np.where(Rover.memory_map[:, :, 2] == 255)
-    Rover.memory_map[:, :, 0][navigable_terrain] = 0
+    navigable_terrain_indices = np.where(Rover.memory_map[:, :, 2] == 255)
+    Rover.memory_map[:, :, 0][navigable_terrain_indices] = 0
 
-    # result = (identify_surrounding_pixels(int(round((Rover.pos[0]) * 10)), int(round(Rover.pos[1] * 10)), Rover.memory_map))
-
+    # result = (
+    #     identify_surrounding_pixels(int(round((Rover.pos[0]) * 10)), int(round(Rover.pos[1] * 10)), Rover.memory_map))
     # print(result)
 
     # 8) Convert rover-centric pixel positions to polar coordinates
@@ -384,8 +458,6 @@ def perception_step(Rover):
     Rover.obstacle_distances = obstacle_distances
     Rover.obstacle_angles = obstacle_angles
 
-    # print("angle_to_min_obstacle_distance ", angle_to_min_obstacle_distance)
-
     # avg_angle = np.mean(angles)
 
     # avg_angle_degrees = avg_angle * 180 / np.pi
@@ -396,8 +468,14 @@ def perception_step(Rover):
 
     # Put seen pixels onto Rover memory
 
+    front_box = (vicinity_sampler(int(round(Rover.pos[0] * 10)), int(round(Rover.pos[1] * 10)), Rover.yaw,
+                                  Rover.memory_map))
 
-    print("Rover pos ", Rover.pos)
+    front_box_tally = obstacle_detected(front_box)
+
+    print("front box ", front_box_tally)
+
+    # print("Rover pos ", Rover.pos)
 
     # result = (identify_surrounding_pixels(int(round((Rover.pos[0]) * 10)), int(round(Rover.pos[1] * 10)), Rover.memory_map))
 
