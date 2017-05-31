@@ -78,8 +78,9 @@ class RoverState():
         self.send_pickup = False # Set to True to trigger rock pickup
 
         #Custom properties
-        self.angle_to_min_obstacle_distance = 0
-        self.map_memory = np.zeros ((2000, 2000))
+        self.obstacle_angles = None
+        self.obstacle_distances = None
+        self.memory_map = np.zeros ((2000, 2000, 3), dtype=np.float)
 
 # Initialize our rover 
 Rover = RoverState()

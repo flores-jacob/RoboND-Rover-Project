@@ -25,8 +25,15 @@ def decision_step(Rover):
                     Rover.throttle = 0
                 Rover.brake = 0
                 # Set steering to average angle clipped to the range +/- 15
+                mean_obstacle_angles = np.mean(Rover.obstacle_angles) * (180/np.pi)
+                complementary_angle = 90 - mean_obstacle_angles
+                # total angle to steer should be 90 degrees clockwise to be a left wall crawling bot or -90 degrees
+                total_steering = (-complementary_angle) + (-mean_obstacle_angles)
+
+                # Rover.steer = (np.clip(-complementary_angle, -15, 15))
                 # Rover.steer = np.clip(np.mean((Rover.nav_angles * 180)/np.pi), -15, 15)
-                # Rover.steer = Rover.angle_to_min_obstacle_distance
+                Rover.steer = -1 * (mean_obstacle_angles)
+                print("Rover steering ", Rover.steer)
 
             # If there's a lack of navigable terrain pixels then go to 'stop' mode
             elif len(Rover.nav_angles) < Rover.stop_forward:
