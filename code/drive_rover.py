@@ -75,6 +75,11 @@ class RoverState():
         self.near_sample = 0 # Will be set to telemetry value data["near_sample"]
         self.picking_up = 0 # Will be set to telemetry value data["picking_up"]
         self.send_pickup = False # Set to True to trigger rock pickup
+
+        #Custom properties
+        self.angle_to_min_obstacle_distance = 0
+        self.map_memory = np.zeros ((2000, 2000))
+
 # Initialize our rover 
 Rover = RoverState()
 

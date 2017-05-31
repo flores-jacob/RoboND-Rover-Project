@@ -200,11 +200,60 @@ def front_obstacle_coords(rover_coords_x, rover_coords_y, look_forward=25):
     xy_coords = np.stack((rover_coords_x, rover_coords_y), axis=1)
     xy_coords = np.flipud(xy_coords)
     obstacle_coords_indices = (xy_coords[:, 1] == (0 | 1 | -1)) & (
-    (xy_coords[:, 0] <= look_forward) & (xy_coords[:, 0] > 15))
+        (xy_coords[:, 0] <= look_forward) & (xy_coords[:, 0] > 15))
     obstacle_coords = xy_coords[obstacle_coords_indices]
     print("obstacle coords ", obstacle_coords)
 
     return obstacle_coords
+
+
+def get_surrounding_pixel_types(rover_x_pos, rover_y_pos, world_map_data_single_layer):
+    # obstacle_layer = world_map_data[:, :, 0]
+    # rock_sample_layer = world_map_data[:, :, 1]
+    # navigable_layer = world_map_data[:, :, 2]
+
+    # print("shape ", world_map_data_single_layer.shape)
+    # print(rover_x_pos)
+    # print(rover_y_pos)
+
+    north_pixel = world_map_data_single_layer[rover_x_pos, rover_y_pos - 1]
+    south_pixel = world_map_data_single_layer[rover_x_pos, rover_y_pos + 1]
+    east_pixel = world_map_data_single_layer[rover_x_pos + 1, rover_y_pos]
+    west_pixel = world_map_data_single_layer[rover_x_pos - 1, rover_y_pos]
+
+    northwest_pixel = world_map_data_single_layer[rover_x_pos - 1, rover_y_pos - 1]
+    northeast_pixel = world_map_data_single_layer[rover_x_pos + 1, rover_y_pos - 1]
+    southwest_pixel = world_map_data_single_layer[rover_x_pos - 1, rover_y_pos + 1]
+    southeast_pixel = world_map_data_single_layer[rover_x_pos + 1, rover_y_pos + 1]
+
+    origin = world_map_data_single_layer[rover_x_pos, rover_y_pos]
+
+    surrounding_pixels = [[northwest_pixel, north_pixel, northeast_pixel],
+                                     [west_pixel, origin, east_pixel],
+                                     [southwest_pixel, south_pixel, southeast_pixel]]
+
+    return surrounding_pixels
+
+
+def identify_surrounding_pixels(rover_x_pos, rover_y_pos, world_map_data):
+    surrounding_obstacle_pixels = get_surrounding_pixel_types(rover_x_pos, rover_y_pos, world_map_data[:, :, 0])
+    surrounding_rock_sample_pixels = get_surrounding_pixel_types(rover_x_pos, rover_y_pos, world_map_data[:, :, 1])
+    surrounding_navigable_pixels = get_surrounding_pixel_types(rover_x_pos, rover_y_pos, world_map_data[:, :, 2])
+
+    surrounding_pixels = np.zeros([3, 3], dtype=np.float)
+
+    for i in range(0, 3):
+        for j in range(0, 3):
+            if surrounding_obstacle_pixels[i][j] > 0:
+                surrounding_pixels[i][j] = 0  # zeros are obstacle pixels
+            elif surrounding_rock_sample_pixels[i][j] > 0:
+                surrounding_pixels[i][j] = 1  # ones are rock sample pixels
+            elif surrounding_navigable_pixels[i][j] > 0:
+                surrounding_pixels[i][j] = 2  # twos are navigable pixels
+            else:
+                surrounding_pixels[i][j] = 3  # threes are unexplored pixels
+
+    return surrounding_pixels
 
 
 # Apply the above functions in succession and update the Rover state accordingly
@@ -292,7 +341,15 @@ def perception_step(Rover):
     # Rover.nav_dists = rover_centric_pixel_distances
     # Rover.nav_angles = rover_centric_angles
 
+    obstacle_distances, obstacle_angles = to_polar_coords(obstacle_xpix, obstacle_ypix)
+    rock_sample_distances, rock_sample_angles = to_polar_coords(rock_sample_xpix, rock_sample_xpix)
     distances, angles = to_polar_coords(navigable_xpix, navigable_ypix)  # Convert to polar coords
+
+    row_min_obstacle_distances = np.argmin(obstacle_distances)
+    angle_to_min_obstacle_distance = obstacle_angles[row_min_obstacle_distances]
+
+    print("angle_to_min_obstacle_distance ", angle_to_min_obstacle_distance)
+
     # avg_angle = np.mean(angles)
 
     # avg_angle_degrees = avg_angle * 180 / np.pi
@@ -301,6 +358,15 @@ def perception_step(Rover):
     Rover.nav_dists = distances
     Rover.nav_angles = angles
 
+
+    # Put seen pixels onto Rover memory
+
+
+    print("Rover pos ", Rover.pos)
+
+    print(identify_surrounding_pixels(int(round(Rover.pos[0] * 10)), int(round(Rover.pos[1]) * 10), Rover.worldmap))
+
+    # Rover.angle_to_min_obstacle_distance = angle_to_min_obstacle_distance * 180 / np.pi
     # Rover.steer = steering
 
     return Rover
