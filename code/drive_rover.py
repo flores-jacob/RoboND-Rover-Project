@@ -81,6 +81,8 @@ class RoverState():
         self.obstacle_angles = None
         self.obstacle_distances = None
         self.memory_map = np.zeros ((2000, 2000, 3), dtype=np.float)
+        self.front_navigable = True
+        self.left_obstacle = False
 
 # Initialize our rover 
 Rover = RoverState()
