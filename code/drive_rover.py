@@ -59,9 +59,9 @@ class RoverState():
         # of navigable terrain pixels.  This is a very crude form of knowing
         # when you can keep going and when you should stop.  Feel free to
         # get creative in adding new fields or modifying these!
-        self.stop_forward = 50 # Threshold to initiate stopping
+        self.stop_forward = 150 # Threshold to initiate stopping
         self.go_forward = 500 # Threshold to go forward again
-        self.max_vel = 2 # Maximum velocity (meters/second)
+        self.max_vel = 1 # Maximum velocity (meters/second)
         # Image output from perception step
         # Update this image to display your intermediate analysis steps
         # on screen in autonomous mode
@@ -80,9 +80,23 @@ class RoverState():
         #Custom properties
         self.obstacle_angles = None
         self.obstacle_distances = None
+        # memory_map layers are the following:
+        # [:,:,0] is the obstacle layer - obstacle points are marked as 5
+        # [:,:,1] is the rock sample layer - rock points are marked as 6
+        # [:,:,2] is the navigable layer - navigable points are marked as 7
+        # [:,:,3] is the explored layer - explored points are marked as 8
         self.memory_map = np.zeros ((2000, 2000, 3), dtype=np.float)
         self.front_navigable = True
+        self.front_obstacle = False
         self.left_obstacle = False
+        self.right_obstacle = False
+        self.upper_left_obstacle = False
+        self.upper_right_obstacle = False
+        self.left_wall_continues = False
+        self.angle_to_next_follow_point = 0
+        self.find_wall_angle = 0
+
+        self.angle_to_rock = 0
 
 # Initialize our rover 
 Rover = RoverState()
