@@ -69,7 +69,7 @@ class RoverState():
         # Worldmap
         # Update this image with the positions of navigable terrain
         # obstacles and rock samples
-        self.worldmap = np.zeros((200, 200, 3), dtype=np.float) 
+        self.worldmap = np.zeros((200, 200, 3), dtype=np.float)
         self.samples_pos = None # To store the actual sample positions
         self.samples_to_find = 0 # To store the initial count of samples
         self.samples_found = 0 # To count the number of samples found
@@ -85,7 +85,7 @@ class RoverState():
         # [:,:,1] is the rock sample layer - rock points are marked as 6
         # [:,:,2] is the navigable layer - navigable points are marked as 7
         # [:,:,3] is the explored layer - explored points are marked as 8
-        self.memory_map = np.zeros ((2000, 2000, 3), dtype=np.float)
+        self.memory_map = np.zeros ((200, 200, 4), dtype=np.uint8)
         self.front_navigable = True
         self.front_obstacle = False
         self.left_obstacle = False
@@ -97,6 +97,10 @@ class RoverState():
         self.find_wall_angle = 0
 
         self.angle_to_rock = 0
+
+        self.destination_point = None
+        self.destination_angle = None # We use None in these 3 properties to
+        self.destination_distance = None # differentiate them from an angle 0 or distance 0
 
 # Initialize our rover 
 Rover = RoverState()

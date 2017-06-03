@@ -55,7 +55,7 @@ def choose_destination(rover_xpos, rover_ypos, memory_map_mini):
     x_point = x_points[distance_min_idx]
     y_point = y_points[distance_min_idx]
 
-    chosen_destination_coords = (x_point, y_point)
+    chosen_destination_coords = (int(x_point), int(y_point))
     chosen_destination_distance = min_distance
     chosen_destination_angle = accompanying_angle
 

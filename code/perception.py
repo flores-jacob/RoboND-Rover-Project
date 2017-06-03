@@ -1,6 +1,8 @@
 import numpy as np
 import cv2
 
+import path_generation_helpers
+
 
 # Identify pixels above the threshold
 # Threshold of RGB > 160 does a nice job of identifying ground pixels only
@@ -509,46 +511,6 @@ def navigable_area(vicinity_array):
     return is_navigable
 
 
-def path_to_visible_course(destination_coords):
-    """
-
-    :param destination_coords:
-    :return: output rover centric angle towards destination
-    """
-
-    # radians_to_destination = (np.arctan2(destination_coords[1]/destination_coords[0]))
-    # angle_to_destination = radians_to_destination * (180/np.pi)
-
-    angles = to_polar_coords(destination_coords[1], destination_coords[0])
-    avg_angle = np.mean(angles)
-    avg_angle_degrees = avg_angle * 180 / np.pi
-    steering = np.clip(avg_angle_degrees, -15, 15)
-    print(steering)
-
-    return steering
-
-
-def choose_destination(rover_xpos, rover_ypos, memory_map):
-    """
-    This function returns a memory_map coordinate. The initial destination is normally chosen to be
-    the nearest unexplored (untagged) point on the memory_map
-
-    This may trigger the rover to first rotate 360 degrees upon initialization to survey what's in sight.
-
-    :return: returns an (x,y) tuple of 2 integers. These is the destination's xy coordinates in the
-    memory _ap.  Rover.memory_map is different from Rover.worldmap.  Rover.memory_map is 10 times
-    larger (2000 x 2000 )and has more layers
-
-    TODO allow the rover to choose as a destination any of the (navigable) areas it has already explored
-
-    """
-
-    explored_layer = memory_map[:, :, 4]
-    unexplored_points = np.where(explored_layer == 0)
-
-    return chosen_destination
-
-
 # Apply the above functions in succession and update the Rover state accordingly
 def perception_step(Rover):
     # Perform perception steps to update Rover()
@@ -633,17 +595,17 @@ def perception_step(Rover):
 
     # make sure that the resultant points are multiplied according by 10 (different from the "scale" value above).
     # This is so that these points occupy the entire 2000 x 2000 map which is 10 times larger than the orginal worldmap
-    obstacle_x_memory, obstacle_y_memory = pix_to_world(obstacle_xpix * 10, obstacle_ypix * 10, Rover.pos[0] * 10,
-                                                        Rover.pos[1] * 10, Rover.yaw,
+    obstacle_x_memory, obstacle_y_memory = pix_to_world(obstacle_xpix, obstacle_ypix, Rover.pos[0],
+                                                        Rover.pos[1], Rover.yaw,
                                                         Rover.memory_map.shape[0], memory_scale)
 
-    rock_sample_x_memory, rock_sample_y_memory = pix_to_world(rock_sample_xpix * 10, rock_sample_ypix * 10,
-                                                              Rover.pos[0] * 10,
-                                                              Rover.pos[1] * 10, Rover.yaw,
+    rock_sample_x_memory, rock_sample_y_memory = pix_to_world(rock_sample_xpix, rock_sample_ypix,
+                                                              Rover.pos[0],
+                                                              Rover.pos[1], Rover.yaw,
                                                               Rover.memory_map.shape[0], memory_scale)
 
-    navigable_x_memory, navigable_y_memory = pix_to_world(navigable_xpix * 10, navigable_ypix * 10, Rover.pos[0] * 10,
-                                                          Rover.pos[1] * 10, Rover.yaw,
+    navigable_x_memory, navigable_y_memory = pix_to_world(navigable_xpix, navigable_ypix, Rover.pos[0],
+                                                          Rover.pos[1], Rover.yaw,
                                                           Rover.memory_map.shape[0], memory_scale)
 
     # 7) Update Rover worldmap (to be displayed on right side of screen)
@@ -651,43 +613,48 @@ def perception_step(Rover):
     #          Rover.worldmap[rock_y_world, rock_x_world, 1] += 1
     #          Rover.worldmap[navigable_y_world, navigable_x_world, 2] += 1
 
-    Rover.worldmap[obstacle_y_world, obstacle_x_world, 0] = 255
-    Rover.worldmap[rock_sample_y_world, rock_sample_x_world, 1] = 255
-    Rover.worldmap[y_world, x_world, 2] = 255
+    if ((Rover.roll > 359) or (Rover.roll < 1)) and ((Rover.pitch > 359) or (Rover.pitch < 1)):
+        Rover.worldmap[obstacle_y_world, obstacle_x_world, 0] = 255
+        Rover.worldmap[rock_sample_y_world, rock_sample_x_world, 1] = 255
+        Rover.worldmap[y_world, x_world, 2] = 255
 
-    # 7b) Update memory map to save coordinates of the seen pixels
+        # 7b) Update memory map to save coordinates of the seen pixels
 
-    Rover.memory_map[obstacle_y_memory, obstacle_x_memory, 0] = 255
-    Rover.memory_map[rock_sample_y_memory, rock_sample_x_memory, 1] = 255
-    Rover.memory_map[navigable_y_memory, navigable_x_memory, 2] = 255
+        # Rover.memory_map[obstacle_y_memory, obstacle_x_memory, 0] = 255
+        # Rover.memory_map[rock_sample_y_memory, rock_sample_x_memory, 1] = 255
+        # Rover.memory_map[navigable_y_memory, navigable_x_memory, 2] = 255
 
-    # 7c) where nav_terrain = 255 and obstacle_terrain = 255 set obstacle_terrain to zero
-    # this is to prevent shadows of obstacle terrain from conflicting with navigable terrain
-    navigable_terrain_indices = np.where(Rover.memory_map[:, :, 2] == 255)
-    Rover.memory_map[:, :, 0][navigable_terrain_indices] = 0
+        Rover.memory_map[obstacle_y_memory, obstacle_x_memory] = (255, 0, 0, 5)
+        Rover.memory_map[rock_sample_y_memory, rock_sample_x_memory] = (0, 255, 0, 6)
+        Rover.memory_map[navigable_y_memory, navigable_x_memory] = (0, 0, 255, 7)
+
+        # 7c) where nav_terrain = 255 and obstacle_terrain = 255 set obstacle_terrain to zero
+        # this is to prevent shadows of obstacle terrain from conflicting with navigable terrain
+        navigable_terrain_indices = np.where(Rover.memory_map[:, :, 2] == 255)
+        Rover.memory_map[:, :, 0][navigable_terrain_indices] = 0
 
     # 7d) note 3 areas of interest based on previously mapped data(Rover.memory_map), front of the rover
-    front_box = front_vicinity_sampler(int(round(Rover.pos[0] * 10)), int(round(Rover.pos[1] * 10)), Rover.yaw,
-                                       Rover.memory_map)
-    left_box = left_vicinity_sampler(int(round(Rover.pos[0] * 10)), int(round(Rover.pos[1] * 10)), Rover.yaw,
-                                     Rover.memory_map)
-    right_box = right_vicinity_sampler(int(round(Rover.pos[0] * 10)), int(round(Rover.pos[1] * 10)), Rover.yaw,
-                                       Rover.memory_map)
-    upper_left_box = upper_left_vicinity_sampler(int(round(Rover.pos[0] * 10)), int(round(Rover.pos[1] * 10)),
-                                                 Rover.yaw,
-                                                 Rover.memory_map)
-    upper_right_box = upper_right_vicinity_sampler(int(round(Rover.pos[0] * 10)), int(round(Rover.pos[1] * 10)),
-                                                   Rover.yaw,
-                                                   Rover.memory_map)
-    # Check if the front is navigable and make a note of it
-    Rover.front_navigable = navigable_area(front_box)
-    Rover.front_obstacle = obstacle_detected(front_box)
-    # Check if there's a wall/obstacle on the left to follow
-    Rover.left_obstacle = obstacle_detected(left_box)
-    Rover.right_obstacle = obstacle_detected(right_box)
-    # Check if the upper left hand corner still has a wall to follow
-    Rover.upper_left_obstacle = obstacle_detected(upper_left_box)
-    Rover.upper_right_obstacle = obstacle_detected(upper_right_box)
+    # front_box = front_vicinity_sampler(int(round(Rover.pos[0] * 10)), int(round(Rover.pos[1] * 10)), Rover.yaw,
+    #                                    Rover.memory_map)
+    # left_box = left_vicinity_sampler(int(round(Rover.pos[0] * 10)), int(round(Rover.pos[1] * 10)), Rover.yaw,
+    #                                  Rover.memory_map)
+    # right_box = right_vicinity_sampler(int(round(Rover.pos[0] * 10)), int(round(Rover.pos[1] * 10)), Rover.yaw,
+    #                                    Rover.memory_map)
+    # upper_left_box = upper_left_vicinity_sampler(int(round(Rover.pos[0] * 10)), int(round(Rover.pos[1] * 10)),
+    #                                              Rover.yaw,
+    #                                              Rover.memory_map)
+    # upper_right_box = upper_right_vicinity_sampler(int(round(Rover.pos[0] * 10)), int(round(Rover.pos[1] * 10)),
+    #                                                Rover.yaw,
+    #                                                Rover.memory_map)
+    # # Check if the front is navigable and make a note of it
+    # Rover.front_navigable = navigable_area(front_box)
+    # Rover.front_obstacle = obstacle_detected(front_box)
+    # # Check if there's a wall/obstacle on the left to follow
+    # Rover.left_obstacle = obstacle_detected(left_box)
+    # Rover.right_obstacle = obstacle_detected(right_box)
+    # # Check if the upper left hand corner still has a wall to follow
+    # Rover.upper_left_obstacle = obstacle_detected(upper_left_box)
+    # Rover.upper_right_obstacle = obstacle_detected(upper_right_box)
 
     # 8) Convert rover-centric pixel positions to polar coordinates
     # Update Rover pixel distances and angles
@@ -698,7 +665,7 @@ def perception_step(Rover):
     rock_sample_distances, rock_sample_angles = to_polar_coords(rock_sample_xpix, rock_sample_xpix)
     distances, angles = to_polar_coords(navigable_xpix, navigable_ypix)  # Convert to polar coords
 
-    Rover.find_wall_angle = (np.mean(-obstacle_angles) / 2) * (180 / np.pi)
+    # Rover.find_wall_angle = (np.mean(-obstacle_angles) / 2) * (180 / np.pi)
 
     # avg_angle = np.mean(angles)
     # avg_angle_degrees = avg_angle * 180 / np.pi
@@ -706,6 +673,24 @@ def perception_step(Rover):
 
     Rover.nav_dists = distances
     Rover.nav_angles = angles
+
+    if Rover.destination_point is None:
+        destination_point, destination_distance, destination_angle = path_generation_helpers.choose_destination(
+            Rover.pos[0], Rover.pos[1], Rover.memory_map[:, :, 3])
+        Rover.destination_point = destination_point
+        Rover.destination_distance = destination_distance
+        Rover.destination_angle = destination_angle
+
+        print(Rover.destination_angle)
+
+
+
+    # for destination_pixel, angle, and distance to work, the rover has to be fully stopped. Otherwise calculations
+    # won't be accurate. Also, obstacle avoidance wouldn't work either, since if the rover has moved significantly from
+    # the original calculated origin point, the plotted path to the destination may no longer be valid
+
+
+
 
     # print("front box ", front_box)
     # print("left_box", Rover.left_obstacle)
@@ -717,9 +702,9 @@ def perception_step(Rover):
 
     # next_point = np.mean()
 
-    left_wall, right_wall = get_side_wall_outlines(navigable_xpix, navigable_ypix)
+    # left_wall, right_wall = get_side_wall_outlines(navigable_xpix, navigable_ypix)
 
-    left_wall = np.concatenate((left_wall, right_wall), axis=0)
+    # left_wall = np.concatenate((left_wall, right_wall), axis=0)
 
     # if left_wall.size > 10:
     #     follow_path = left_wall[:, :] - np.asarray([[0, 2.5]])
@@ -739,7 +724,7 @@ def perception_step(Rover):
     #         Rover.left_wall_continues = False
     # else:
     # Rover.angle_to_next_follow_point = np.mean(angles) * (180 / np.pi)
-    Rover.angle_to_next_follow_point = (np.mean(-obstacle_angles) / 2) * (180 / np.pi)
+    # Rover.angle_to_next_follow_point = (np.mean(-obstacle_angles) / 2) * (180 / np.pi)
 
     # print("next follow point", next_follow_point)
     # nearest_wall_point = left_wall[10, :]
@@ -765,19 +750,21 @@ def perception_step(Rover):
     #     Rover.steer = 15
     # elif not left_wall.size:
     #     Rover.wall_available = False
-    print("left wall size", left_wall.size)
-    print("front is navigable ", Rover.front_navigable)
-    print("front is obstacle ", Rover.front_navigable)
-    print("left wall obstacle ", Rover.left_obstacle)
-    print("upper left obstacle", Rover.upper_left_obstacle)
-    print("upper right obstacle", Rover.upper_right_obstacle)
+    # print("left wall size", left_wall.size)
+    # print("front is navigable ", Rover.front_navigable)
+    # print("front is obstacle ", Rover.front_navigable)
+    # print("left wall obstacle ", Rover.left_obstacle)
+    # print("upper left obstacle", Rover.upper_left_obstacle)
+    # print("upper right obstacle", Rover.upper_right_obstacle)
+    #
+    # print("Rover mode ", Rover.mode)
 
-    print("Rover mode ", Rover.mode)
+    # if rock_sample_xpix.size and rock_sample_ypix.size:
+    #     angle_to_rock = path_to_visible_course((rock_sample_xpix, rock_sample_ypix))
+    #     Rover.angle_to_rock = angle_to_rock
+    # else:
+    #     Rover.angle_to_rock = 0
 
-    if rock_sample_xpix.size and rock_sample_ypix.size:
-        angle_to_rock = path_to_visible_course((rock_sample_xpix, rock_sample_ypix))
-        Rover.angle_to_rock = angle_to_rock
-    else:
-        Rover.angle_to_rock = 0
+
 
     return Rover
