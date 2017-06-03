@@ -164,6 +164,25 @@ def obstacle_crossed_by_line(origin_x, origin_y, destination_x, destination_y, m
 
 
 def sidestep_obstacle(origin_x, origin_y, destination_x, destination_y, map_data, navigable_flag, obstacle_flag):
+    """
+    This function takes origin coordinates and destination coordinates, and plots a path to the destination in two steps
+    or two lines uninterrupted by obstacles based on the map_data
+    :param origin_x:
+    :param origin_y:
+    :param destination_x:
+    :param destination_y:
+    :param map_data: 2 dimensional array flagged with indices representing nature of their coordinates
+    :param navigable_flag: int used when on map_data when flagging navigable pixels
+    :param obstacle_flag: int used when on map_data when flagging obstacle pixels
+    :return: a Path_guide named tuple that contains the following values:
+        ["midpoint_x", "midpoint_y", "midpoint_distance", "midpoint_angle", "destination_distance","destination_angle"]
+        midpoint_x: x coordinate of the midpoint
+        midpoint_y: y coordinate of the midpoint
+        midpoint_distance: distance from the origin to the midpoint
+        midpoint_angle: angle from teh origin to the midpoint
+        destination_distance: distance from the midpoint to the destination
+        destination_angle: angle from the midoint to the destination
+    """
     assert np.ndim(map_data) == 2
 
     # compute the distance between origin and all navigable points, and all navigable points to destinaion point
@@ -176,7 +195,6 @@ def sidestep_obstacle(origin_x, origin_y, destination_x, destination_y, map_data
     combined_distance = distance_origin_to_midpoint + distance_midpoint_to_destination
 
     # find the shortest distance, but remember its original index
-
     original_indices = np.argsort(combined_distance)
 
     for original_index in original_indices:
@@ -196,7 +214,7 @@ def sidestep_obstacle(origin_x, origin_y, destination_x, destination_y, map_data
         # if not blocked, compute the polar coordinates to be sent to the rover
         if (obstacle_crossed_part_1 is False) and (obstacle_crossed_part_2 is False):
             Path_guide = namedtuple("Path_guide",
-                                    ["x", "y", "midpoint_distance", "midpoint_angle", "destination_distance",
+                                    ["midpoint_x", "midpoint_y", "midpoint_distance", "midpoint_angle", "destination_distance",
                                      "destination_angle"])
             midpoint_distance, midpoint_angle = to_polar_coords_with_origin(origin_x, origin_y, midpoint_x, midpoint_y)
             destination_distance, destination_angle = to_polar_coords_with_origin(midpoint_x, midpoint_y, destination_x,
