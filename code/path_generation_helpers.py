@@ -22,6 +22,12 @@ def compute_distances(origin_x, origin_y, x_points, y_points):
 
 # adapted from https://stackoverflow.com/a/7869457
 def compute_misalignment(destination_angle, yaw):
+    """
+
+    :param destination_angle:
+    :param yaw:
+    :return: misalignment in degrees
+    """
 
     angle_difference = destination_angle - yaw
     misalignment = (angle_difference + 180) % 360 - 180

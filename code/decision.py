@@ -1,5 +1,6 @@
 import numpy as np
 
+MISALIGNMENT_THRESHOLD = 5
 
 # This is where you can build a decision tree for determining throttle, brake and steer 
 # commands based on the output of the perception_step() function
@@ -14,6 +15,10 @@ def decision_step(Rover):
     if Rover.nav_angles is not None:
         # Check for Rover.mode status
         if Rover.mode == 'forward':
+            # Check if we have a destination point plotted out, if not, stop and get a destination
+            if Rover.destination_point is None:
+                Rover.mode = 'stop'
+
             # Check the extent of navigable terrain
             if len(Rover.nav_angles) >= Rover.stop_forward:
                 # If mode is forward, navigable terrain looks good 
@@ -24,8 +29,12 @@ def decision_step(Rover):
                 else: # Else coast
                     Rover.throttle = 0
                 Rover.brake = 0
-                # Set steering to average angle clipped to the range +/- 15
-                Rover.steer = np.clip(np.mean(Rover.nav_angles * 180/np.pi), -15, 15)
+                # Set steering to be consistent with the destination angle
+                if abs(Rover.misalignment) <= MISALIGNMENT_THRESHOLD:
+                    Rover.steer = np.clip(Rover.misalignment, -15, 15)
+                # If the difference in angles is far too different, stop the vehicle
+                elif abs(Rover.misalignment) > MISALIGNMENT_THRESHOLD:
+                    Rover.mode = 'stop'
             # If there's a lack of navigable terrain pixels then go to 'stop' mode
             elif len(Rover.nav_angles) < Rover.stop_forward:
                     # Set mode to "stop" and hit the brakes!
@@ -45,25 +54,30 @@ def decision_step(Rover):
             # If we're not moving (vel < 0.2) then do something else
             elif Rover.vel <= 0.2:
                 # Now we're stopped and we have vision data to see if there's a path forward
-                if len(Rover.nav_angles) < Rover.go_forward:
-                    Rover.throttle = 0
-                    # Release the brake to allow turning
-                    Rover.brake = 0
-                    # Turn range is +/- 15 degrees, when stopped the next line will induce 4-wheel turning
-                    # Rover.steer = -15 # Could be more clever here about which way to turn
-                    Rover.steer = np.clip((Rover.destination_angle * 180/np.pi), -15, 15)
-                # If we're stopped but see sufficient navigable terrain in front then go!
-                if len(Rover.nav_angles) >= Rover.go_forward:
+                # If we're stopped butnot aligned to destination angle, then turn towards the destination
+                if abs(Rover.misalignment) > MISALIGNMENT_THRESHOLD:
+                    Rover.steer = np.clip(Rover.misalignment, -15, 15)
+                # If we are aligned, and if we're stopped but see sufficient navigable terrain in front then go!
+                elif len(Rover.nav_angles) >= Rover.go_forward:
                     # Set throttle back to stored value
                     Rover.throttle = Rover.throttle_set
                     # Release the brake
                     Rover.brake = 0
-                    # Set steer to mean angle
-                    Rover.steer = np.clip(np.mean(Rover.nav_angles * 180/np.pi), -15, 15)
+                    # if abs(Rover.misalignment) <= MISALIGNMENT_THRESHOLD:
+                        # Set steer to mean angle
+                        # Rover.steer = np.clip(Rover.misalignment, -15, 15)
                     Rover.mode = 'forward'
+
+                if (len(Rover.nav_angles) < Rover.go_forward) and (Rover.misalignment < MISALIGNMENT_THRESHOLD):
+                    Rover.throttle = 0
+                    # Release the brake to allow turning
+                    Rover.brake = 0
+                    # Turn range is +/- 15 degrees, when stopped the next line will induce 4-wheel turning
+                    Rover.steer = np.clip(Rover.misalignment, -15, 15)
     # Just to make the rover do something 
     # even if no modifications have been made to the code
     else:
+        print("else")
         Rover.throttle = Rover.throttle_set
         Rover.steer = 0
         Rover.brake = 0
