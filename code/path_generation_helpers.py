@@ -57,9 +57,8 @@ def choose_destination(origin_xpos, origin_ypos, map_data, minimum_distance=0):
 
     unexplored_point_indices = np.where(map_data == 0)
 
-    # The first array (index 0) are the y values.  The second one (index 1) are the x values
-    x_points = unexplored_point_indices[1]
-    y_points = unexplored_point_indices[0]
+    x_points = unexplored_point_indices[0]
+    y_points = unexplored_point_indices[1]
 
     distances, angles = to_polar_coords_with_origin(origin_xpos, origin_ypos, x_points, y_points)
 
