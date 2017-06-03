@@ -675,13 +675,22 @@ def perception_step(Rover):
     Rover.nav_angles = angles
 
     if Rover.destination_point is None:
-        destination_point, destination_distance, destination_angle = path_generation_helpers.choose_destination(
-            Rover.pos[0], Rover.pos[1], Rover.memory_map[:, :, 3])
+        destination_point, destination_distance, destination_radians = path_generation_helpers.choose_destination(
+            Rover.pos[0], Rover.pos[1], Rover.memory_map[:, :, 3], minimum_distance=10)
         Rover.destination_point = destination_point
         Rover.destination_distance = destination_distance
-        Rover.destination_angle = destination_angle
+        Rover.destination_angle = (destination_radians * (180/np.pi))
+    elif Rover.destination_point:
+        destination_distance, destination_radians = path_generation_helpers.to_polar_coords_with_origin(Rover.pos[0], Rover.pos[1], Rover.destination_point[0], Rover.destination_point[1])
+        Rover.destination_distance = destination_distance
+        Rover.destination_angle = (destination_radians * (180/np.pi))
 
-        print(Rover.destination_angle)
+    Rover.misalignment = path_generation_helpers.compute_misalignment(Rover.destination_angle, Rover.yaw)
+
+    print_to_screen = "rover dest " + str(Rover.destination_point) + ", rover pos " + str(Rover.pos) + ", destination angle " + str(Rover.destination_angle) + ", yaw " + str(Rover.yaw) + ", misalignment " + str(Rover.misalignment) + ", steer " + str(Rover.steer)
+    print(Rover.mode)
+    print(print_to_screen)
+
 
 
 
