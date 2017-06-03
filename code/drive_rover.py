@@ -101,6 +101,7 @@ class RoverState():
         self.destination_point = None
         self.destination_angle = None # We use None in these 3 properties to
         self.destination_distance = None # differentiate them from an angle 0 or distance 0
+        self.misalignment = 0
 
 # Initialize our rover 
 Rover = RoverState()
