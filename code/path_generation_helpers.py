@@ -20,38 +20,52 @@ def compute_distances(origin_x, origin_y, x_points, y_points):
     return distances
 
 
-def choose_destination(rover_xpos, rover_ypos, memory_map_mini):
+# adapted from https://stackoverflow.com/a/7869457
+def compute_misalignment(destination_angle, yaw):
+
+    angle_difference = destination_angle - yaw
+    misalignment = (angle_difference + 180) % 360 - 180
+
+    return misalignment
+
+
+def choose_destination(origin_xpos, origin_ypos, map_data, minimum_distance=0):
     """
     This function returns a memory_map coordinate. The initial destination is normally chosen to be
     the nearest unexplored (untagged) point on the memory_map
 
     This may trigger the rover to first rotate 360 degrees upon initialization to survey what's in sight.
+    TODO allow the rover to choose as a destination any of the (navigable) areas it has already explored
 
+    :param origin_xpos:
+    :param origin_ypos:
+    :param map_data:
+    :param minimum_distance: Specify a minimum distance. This is to prevent the rover from constantly
+    stopping every 1 or 2 pixels after achieving its target destination
     :return: returns an (x,y) tuple of 2 integers. These is the destination's xy coordinates in the
     memory _ap.  Rover.memory_map is different from Rover.worldmap.  Rover.memory_map is 10 times
     larger (2000 x 2000 )and has more layers
-
-    TODO allow the rover to choose as a destination any of the (navigable) areas it has already explored
-
     """
 
-    assert memory_map_mini.ndim == 2, " map does not have 2 dimensions "
+    assert map_data.ndim == 2, " map does not have 2 dimensions "
 
-    unexplored_point_indices = np.where(memory_map_mini == 0)
+    unexplored_point_indices = np.where(map_data == 0)
 
     # The first array (index 0) are the y values.  The second one (index 1) are the x values
     x_points = unexplored_point_indices[1]
     y_points = unexplored_point_indices[0]
 
-    # print("x_points ", len(x_points))
-    # print("y_points ", len(y_points))
+    distances, angles = to_polar_coords_with_origin(origin_xpos, origin_ypos, x_points, y_points)
 
-    distances, angles = to_polar_coords_with_origin(rover_xpos, rover_ypos, x_points, y_points)
+    # Get the argmin values given a condition
+    # https://seanlaw.github.io/2015/09/10/numpy-argmin-with-a-condition/
+    mask = (distances >= minimum_distance)
+    subset_idx = np.argmin(distances[mask])
+    parent_idx = np.arange(distances.shape[0])[mask][subset_idx]
 
-    distance_min_idx = np.argmin(distances)
+    distance_min_idx = parent_idx
     min_distance = distances[distance_min_idx]
     accompanying_angle = angles[distance_min_idx]
-
     x_point = x_points[distance_min_idx]
     y_point = y_points[distance_min_idx]
 
@@ -59,8 +73,8 @@ def choose_destination(rover_xpos, rover_ypos, memory_map_mini):
     chosen_destination_distance = min_distance
     chosen_destination_angle = accompanying_angle
 
-    x_diff = x_point - float(rover_xpos)
-    y_diff = y_point - float(rover_ypos)
+    x_diff = x_point - float(origin_xpos)
+    y_diff = y_point - float(origin_ypos)
 
     # logging.debug("min distance " + str(min_distance))
     # logging.debug("x_diff " + str(x_diff))
@@ -70,7 +84,6 @@ def choose_destination(rover_xpos, rover_ypos, memory_map_mini):
     # logging.debug("accompanying_ angle " + str(accompanying_angle))
     # logging.debug("np.arctan2(float(y_diff), x_diff) " + str(np.arctan2(float(y_diff), x_diff)))
 
-    #     assert (float(min_distance ** 2) == float((x_diff ** 2) + (y_diff ** 2)))
     c_squared = min_distance ** 2
     a_squared = (x_diff ** 2)
     b_squared = (y_diff ** 2)
