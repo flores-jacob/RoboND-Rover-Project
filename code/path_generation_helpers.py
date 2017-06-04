@@ -35,6 +35,19 @@ def compute_misalignment(destination_angle, yaw):
     return misalignment
 
 
+def get_surrounding_values(x_pixel, y_pixel, map_data, radius=1):
+    """
+    Identify and return a pixel's value along with the values of its surrounding pixels
+    :param x_pixel:
+    :param y_pixel:
+    :param map_data: 2 dimensional map that holds the pixel and the values
+    :param radius: how many pixels from teh central pixel are we going to fetch the values of
+    :return: 2 dimensional array with (x_pixel, y_pixel) at the middle
+    """
+    assert np.ndim(map_data) == 2
+    surrounding_pixels = map_data[(y_pixel - radius):(y_pixel + radius + 1), (x_pixel - radius): (x_pixel + radius + 1)]
+    return surrounding_pixels
+
 def choose_destination(origin_xpos, origin_ypos, map_data, minimum_distance=0):
     """
     This function returns a memory_map coordinate. The initial destination is normally chosen to be
