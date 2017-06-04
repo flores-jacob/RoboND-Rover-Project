@@ -106,12 +106,25 @@ def obstacle_crossed_by_line(origin_x, origin_y, destination_x, destination_y, m
     map_data: should be a 2 dimensional array indicating which areas are obstacles and not
     line_width: TODO find all points traversed by a line with thickness of line_width
     return: list of (x,y) tuples
+    :param origin_x:
+    :param origin_y:
+    :param destination_x:
+    :param destination_y:
+    :param map_data:
+    :param flag_list: List of integers that flag obstacles (or areas to avoid) in the map_data
+    :param granularity:
+    :param line_width:
+    :param return_all:
+    :return:
     """
+
+    assert np.ndim(map_data) == 2, "map_data is not 2 dimensional"
+
     # "draw" the line by getting its different elements
     x_diff = destination_x - float(origin_x)  # convert one of the numbers into float so that we can have more
     y_diff = destination_y - float(origin_y)  # accurate computations, with no rounding off
 
-    slope = y_diff / x_diff
+    slope = y_diff / (x_diff + 0.00001)# add a small amount to avoid zero division error
 
     y_intercept = origin_y - (slope * origin_x)
 
@@ -121,10 +134,10 @@ def obstacle_crossed_by_line(origin_x, origin_y, destination_x, destination_y, m
     range_start = min(origin_x, destination_x)
     range_end = max(origin_x, destination_x)
 
-    if (0 <= abs(angle) <= np.pi / 2) or (((3 * np.pi) / (np.pi * 2)) < abs(angle) < (np.pi * 2)):
+    if (0 <= abs(angle) <= (np.pi / 2)) or (((3 * np.pi) / (np.pi * 2)) < abs(angle) < (np.pi * 2)):
         # check from left to right
         range_to_iterate_over = np.arange(range_start, range_end, granularity)
-    elif (np.pi / 2 < abs(angle) <= np.pi) or (np.pi < abs(angle) <= (3 * np.pi) / (np.pi * 2)):
+    elif ((np.pi / 2) < abs(angle) <= np.pi) or (np.pi < abs(angle) <= ((3 * np.pi) / (np.pi * 2))):
         # if the angle is more than 90 degrees, x should be from right to left
         range_to_iterate_over = np.arange(range_start, range_end, granularity)[::-1]
 
