@@ -30,7 +30,6 @@ def decision_step(Rover):
                 if x_reached and y_reached:
                     Rover.destination_point = None
                     print("destination_removed")
-
                     print("pixel tag", Rover.memory_map[Rover.destination_point[0], Rover.destination_point[1],3])
 
             # Check the extent of navigable terrain
@@ -71,38 +70,45 @@ def decision_step(Rover):
             # If we're not moving (vel < 0.2) then do something else
             elif Rover.vel <= 0.2:
                 print("now slow")
-                # Now we're stopped and we have vision data to see if there's a path forward
-                # If we're stopped butnot aligned to destination angle, then turn towards the destination
-                if abs(Rover.misalignment) > MISALIGNMENT_THRESHOLD:
+                # Now we're stopped
+                # Check if we are correctly aligned, and the rover is pointing to the destination
+                if abs(Rover.misalignment) <=.05:
+                    # if yes, check if we have space in front
+                    print("misalignment corrected")
+                    # if the destination has been reached
+                    if (np.floor(Rover.pos[0]), np.floor(Rover.pos[1])) == (Rover.destination_point):
+                        Rover.destination_point = None
+                    # we will need a smarter way to check if we have space in frontS
+                    elif len(Rover.nav_angles) >= Rover.go_forward:
+                        print("going forward since it's free")
+                        # Set throttle back to stored value
+                        Rover.throttle = Rover.throttle_set
+                        # Release the brake
+                        Rover.brake = 0
+                        # if abs(Rover.misalignment) <= MISALIGNMENT_THRESHOLD:
+                        # Set steer to mean angle
+                        # Rover.steer = np.clip(Rover.misalignment, -15, 15)
+                        Rover.mode = 'forward'
+                    # if there is no space in front, then we assign None to destination
+                    # for it to be replaced
+                    else:
+                        print("no space in front, emptying midpoint and destination")
+                        Rover.destination_point = None
+
+                # if we are still significantly misaligned, continue turning
+                elif abs(Rover.misalignment) > .05:
                     print("Correcting misalignment")
-                    Rover.brake = 0
-                    # Rover.steer = np.clip(Rover.misalignment, -15, 15)
-                    Rover.steer = Rover.misalignment
-                # If we are aligned, and if we're stopped but see sufficient navigable terrain in front then go!
-                elif len(Rover.nav_angles) >= Rover.go_forward:
-                    print("going forward since it's free")
-                    # Set throttle back to stored value
-                    Rover.throttle = Rover.throttle_set
+                    # Make sure we're not throttling
+                    Rover.throttle = 0
                     # Release the brake
                     Rover.brake = 0
-                    # if abs(Rover.misalignment) <= MISALIGNMENT_THRESHOLD:
-                    # Set steer to mean angle
-                    # Rover.steer = np.clip(Rover.misalignment, -15, 15)
-                    Rover.mode = 'forward'
-
-                if (len(Rover.nav_angles) < Rover.go_forward) and (Rover.misalignment < MISALIGNMENT_THRESHOLD):
-                    print(" not enough nav angles, turn some more")
-                    # If blocked from reaching its destination, choose a new destination
-                    Rover.destination_point = None
-                    Rover.throttle = 0
-                    # Release the brake to allow turning
-                    Rover.brake = 0
-                    # Turn range is +/- 15 degrees, when stopped the next line will induce 4-wheel turning
+                    # Turn to the correct orientation
                     Rover.steer = np.clip(Rover.misalignment, -15, 15)
+
     # Just to make the rover do something 
     # even if no modifications have been made to the code
     else:
-        print("else")
+        print("No angles to work with")
         Rover.throttle = Rover.throttle_set
         Rover.steer = 0
         Rover.brake = 0
