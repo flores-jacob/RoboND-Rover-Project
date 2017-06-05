@@ -48,6 +48,7 @@ def get_surrounding_values(x_pixel, y_pixel, map_data, radius=1):
     surrounding_pixels = map_data[(y_pixel - radius):(y_pixel + radius + 1), (x_pixel - radius): (x_pixel + radius + 1)]
     return surrounding_pixels
 
+
 def choose_destination(origin_xpos, origin_ypos, map_data, minimum_distance=0):
     """
     This function returns a memory_map coordinate. The initial destination is normally chosen to be
@@ -111,6 +112,41 @@ def choose_destination(origin_xpos, origin_ypos, map_data, minimum_distance=0):
     return chosen_destination_coords, chosen_destination_distance, chosen_destination_angle
 
 
+def get_range_to_iterate_over(origin_x, origin_y, destination_x, destination_y, angle, granularity):
+    """
+    angle: in radians
+    """
+    # set the range to begin from the lowest x value to the highest
+    range_start_x = min(origin_x, destination_x)
+    range_end_x = max(origin_x, destination_x)
+
+    if (0 <= abs(angle) <= (np.pi / 2)) or (((3 * np.pi) / 4) < abs(angle) < (np.pi * 2)):
+        # print(" quadrant I or IV")
+        # check from left to right
+        range_to_iterate_over_x = np.arange(range_start_x, range_end_x, granularity)
+    elif (np.pi / 2) < abs(angle) <= ((3 * np.pi) / 4):  # or (((3 * np.pi)/ (np.pi * 2)) < abs(angle) <= (3 * np.pi)/ (np.pi * 4)):
+        # print("quadrant II or III")
+        # if the angle is more than 90 degrees, x should be from right to left
+        range_to_iterate_over_x = np.arange(range_start_x, range_end_x, granularity)[::-1]
+
+    # do the same for y values
+    range_start_y = min(origin_y, destination_y)
+    range_end_y = max(origin_y, destination_y)
+
+    # if the angle is in the 2 upper quadrants of the cartesian plane
+    if (0 <= angle <= np.pi) or (-np.pi <= angle <= -np.pi * 2):
+        # print("quadrant I or II")
+        # check from bottom to top
+        range_to_iterate_over_y = np.arange(range_start_y, range_end_y, granularity)
+    # if the anlge is in the 2 bottom quadrants of the cartesian plane
+    elif (np.pi < angle < np.pi * 2) or (-np.pi < angle < 0):
+        # print("quadrant III or IV")
+        # check from top to bottom
+        range_to_iterate_over_y = np.arange(range_start_y, range_end_y, granularity)[::-1]
+
+    return range_to_iterate_over_x, range_to_iterate_over_y
+
+
 def obstacle_crossed_by_line(origin_x, origin_y, destination_x, destination_y, map_data, flag_list, granularity=1,
                              line_width=0, return_all=False):
     """
@@ -118,7 +154,7 @@ def obstacle_crossed_by_line(origin_x, origin_y, destination_x, destination_y, m
     can only detect coordinate's whose x values are divisible by the granularity value
     map_data: should be a 2 dimensional array indicating which areas are obstacles and not
     line_width: TODO find all points traversed by a line with thickness of line_width
-    return: list of (x,y) tuples
+    return:
     :param origin_x:
     :param origin_y:
     :param destination_x:
@@ -127,37 +163,34 @@ def obstacle_crossed_by_line(origin_x, origin_y, destination_x, destination_y, m
     :param flag_list: List of integers that flag obstacles (or areas to avoid) in the map_data
     :param granularity:
     :param line_width:
-    :param return_all:
-    :return:
+    :param return_all: if True, all crossed obstacle coords are returned, otherwise, just the first one is returned
+    :return: list of (x,y) tuples representing crossed obstacle coords
     """
 
     assert np.ndim(map_data) == 2, "map_data is not 2 dimensional"
 
     # "draw" the line by getting its different elements
-    x_diff = destination_x - float(origin_x)  # convert one of the numbers into float so that we can have more
-    y_diff = destination_y - float(origin_y)  # accurate computations, with no rounding off
 
-    slope = y_diff / (x_diff + 0.00001)# add a small amount to avoid zero division error
+    # we add a small amount to the x and y diffs to avoid operations on zero values
+    x_diff = destination_x - float(origin_x) + .000001  # convert one of the numbers into float so that we can have more
+    y_diff = destination_y - float(origin_y) + .000001  # accurate computations, with no rounding off
+
+    slope = y_diff / x_diff
 
     y_intercept = origin_y - (slope * origin_x)
 
     distance, angle = to_polar_coords_with_origin(origin_x, origin_y, destination_x, destination_y)
 
-    # set the range to begin from the lowest x value to the highest
-    range_start = min(origin_x, destination_x)
-    range_end = max(origin_x, destination_x)
-
-    if (0 <= abs(angle) <= (np.pi / 2)) or (((3 * np.pi) / (np.pi * 2)) < abs(angle) < (np.pi * 2)):
-        # check from left to right
-        range_to_iterate_over = np.arange(range_start, range_end, granularity)
-    elif ((np.pi / 2) < abs(angle) <= np.pi) or (np.pi < abs(angle) <= ((3 * np.pi) / (np.pi * 2))):
-        # if the angle is more than 90 degrees, x should be from right to left
-        range_to_iterate_over = np.arange(range_start, range_end, granularity)[::-1]
+    range_to_iterate_over_x, range_to_iterate_over_y = get_range_to_iterate_over(origin_x, origin_y, destination_x,
+                                                                                 destination_y, angle, granularity)
 
     # if x y coords are given, check each x, y coordinate pairs from x_points y_points if they are on the line
     if return_all is True:  # run the function until all flagged coordinates that cross the line are returned
-        crossed_flagged_coords = []
-        for x in range_to_iterate_over:
+        crossed_flagged_coords_x = []
+        crossed_flagged_coords_y = []
+
+        # check if any of the x values between the origin and destination have y_values that are obstacles
+        for x in range_to_iterate_over_x:
             y = (slope * x) + y_intercept
 
             # round up and down because numpy only accepts integers when accessing array values
@@ -165,26 +198,76 @@ def obstacle_crossed_by_line(origin_x, origin_y, destination_x, destination_y, m
             y_up = np.ceil(y)
             y_down = np.floor(y)
             for flag in flag_list:
-                if map_data[int(y_up), int(x)] == flag:
-                    crossed_flagged_coords.append((int(x), int(y)))
-                elif map_data[int(y_down), int(x)] == flag:
-                    crossed_flagged_coords.append((int(x), int(y)))
+                if (map_data[int(y_up), int(x)] == flag):
+                    crossed_flagged_coords_x.append((int(x), int(y)))
+                elif (map_data[int(y_down), int(x)] == flag):
+                    crossed_flagged_coords_x.append((int(x), int(y)))
+        # do the same thing for y
+        for y in range_to_iterate_over_y:
+            x = (y - y_intercept) / slope
+            x_left = np.floor(x)
+            x_right = np.ceil(x)
+            for flag in flag_list:
+                if map_data[int(y), int(x_left)] == flag:
+                    crossed_flagged_coords_y.append((int(x_left), int(y)))
+                if map_data[int(y), int(x_right)] == flag:
+                    crossed_flagged_coords_y.append((int(x_right), int(y)))
+
+        # combine the crossed x and y coords with each other
+        # https://stackoverflow.com/a/1319353
+        crossed_flagged_coords = crossed_flagged_coords_x + list(
+            set(crossed_flagged_coords_y) - set(crossed_flagged_coords_x))
         # no need to proceed with the rest of the function
         return crossed_flagged_coords
-    else:  # just return the first obstacle that
+    else:  # just return the first x or y obstacle that is encountered
         # for each flag in the list, check if they are found on the line
-        for x in range_to_iterate_over:
+        first_obstacle_x = None
+        first_obstacle_y = None
+        for x in range_to_iterate_over_x:
+            # if we already have a first obstacle, do not prceed with the loop
+            if first_obstacle_x is not None:
+                break
             y = (slope * x) + y_intercept
-
             # round up and down because numpy only accepts integers when accessing array values
             # speaking of which, it may not be possible to have a granularity that is less than one
             y_up = np.ceil(y)
             y_down = np.floor(y)
             for flag in flag_list:
-                if map_data[int(y_up), int(x)] == flag:
-                    return [(x, int(y_up))]
-                elif map_data[int(y_down), int(x)] == flag:
-                    return [(x, int(y_down))]
+                if (map_data[int(y_up), int(x)] == flag):
+                    first_obstacle_x = (x, int(y_up))
+                    break
+                elif (map_data[int(y_down), int(x)] == flag):
+                    first_obstacle_x = (x, int(y_down))
+                    break
+
+        # do the same thing for y
+        for y in range_to_iterate_over_y:
+            # if first obstacle y is not none, break the loop
+            if first_obstacle_y is not None:
+                break
+            x = (y - y_intercept) / slope
+            x_left = np.floor(x)
+            x_right = np.ceil(x)
+            for flag in flag_list:
+                if map_data[int(y), int(x_left)] == flag:
+                    first_obstacle_y = (int(x_left), int(y))
+                    break
+                if map_data[int(y), int(x_right)] == flag:
+                    first_obstacle_y = (int(x_right), int(y))
+                    break
+        if first_obstacle_x and first_obstacle_y:
+            # compute which obstacle is closest
+            first_x_distance = compute_distances(origin_x, origin_y, first_obstacle_x[0], first_obstacle_x[1])
+            first_y_distance = compute_distances(origin_x, origin_y, first_obstacle_y[0], first_obstacle_y[1])
+            # return the closest obstacle as a list
+            if first_x_distance > first_y_distance:
+                return [first_obstacle_y]
+            elif first_y_distance > first_x_distance:
+                return [first_obstacle_x]
+        elif first_obstacle_x:
+            return [first_obstacle_x]
+        elif first_obstacle_y:
+            return [first_obstacle_y]
 
     return False
 
@@ -240,7 +323,8 @@ def sidestep_obstacle(origin_x, origin_y, destination_x, destination_y, map_data
         # if not blocked, compute the polar coordinates to be sent to the rover
         if (obstacle_crossed_part_1 is False) and (obstacle_crossed_part_2 is False):
             Path_guide = namedtuple("Path_guide",
-                                    ["midpoint_x", "midpoint_y", "midpoint_distance", "midpoint_angle", "destination_distance",
+                                    ["midpoint_x", "midpoint_y", "midpoint_distance", "midpoint_angle",
+                                     "destination_distance",
                                      "destination_angle"])
             midpoint_distance, midpoint_angle = to_polar_coords_with_origin(origin_x, origin_y, midpoint_x, midpoint_y)
             destination_distance, destination_angle = to_polar_coords_with_origin(midpoint_x, midpoint_y, destination_x,
