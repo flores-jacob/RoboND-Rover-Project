@@ -1,6 +1,9 @@
 import numpy as np
+import path_generation_helpers
 
 MISALIGNMENT_THRESHOLD = 5
+
+DESTINATION_LIST = [(103, 75), (110, 48), (114, 7)]
 
 
 # This is where you can build a decision tree for determining throttle, brake and steer
@@ -10,54 +13,89 @@ def decision_step(Rover):
     # Here you're all set up with some basic functionality but you'll need to
     # improve on this decision tree to do a good job of navigating autonomously!
 
+    # Check if we have a destination point plotted out, if not, stop and get a destination
+    if Rover.destination_point is None:
+        Rover.mode = 'stop'
+        Rover.destination_point = DESTINATION_LIST.pop(0)
+    elif Rover.destination_point:
+        # If the x and y values of the current position rounded up or down are equivalent to
+        # the destination point:
+
+        x_range = range(round(Rover.pos[0]) - 1, round(Rover.pos[0] + 1))
+        y_range = range(round(Rover.pos[1]) - 1, round(Rover.pos[1] + 1))
+        print("x range ", x_range)
+        print("y range ", y_range)
+
+        # x_reached = (np.ceil(Rover.pos[0]) or np.floor(Rover.pos[0])) == Rover.destination_point[0]
+        x_reached = Rover.destination_point[0] in x_range
+        # y_reached = (np.ceil(Rover.pos[1]) or np.floor(Rover.pos[1])) == Rover.destination_point[1]
+        y_reached = Rover.destination_point[1] in y_range
+        # We set the destination_point property to zero so that perception can find a new one
+        if x_reached and y_reached:
+            Rover.midpoint = None
+            # destination_point, __, destination_radians = path_generation_helpers.choose_destination(
+            #     Rover.pos[0], Rover.pos[1], Rover.memory_map[:, :, 3], minimum_distance=10)
+            Rover.destination_point = None
+            print("destination_replaced")
+            print("pixel tag", Rover.memory_map[Rover.destination_point[0], Rover.destination_point[1], 3])
+
     # Example:
     # Check if we have vision data to make decisions with
     if Rover.nav_angles is not None:
         # Check for Rover.mode status
         if Rover.mode == 'forward':
-            # Check if we have a destination point plotted out, if not, stop and get a destination
-            if Rover.destination_point is None:
-                Rover.mode = 'stop'
-                print("no destination point")
             # if a destination point exists
-            elif Rover.destination_point:
+            if Rover.destination_point:
                 print("with_destination_point")
-                # IF the x and y values of the current position rounded up or down are equivalent to
-                # the destination point:
-                x_reached = (np.ceil(Rover.pos[0]) or np.floor(Rover.pos[0])) == Rover.destination_point[0]
-                y_reached = (np.ceil(Rover.pos[1]) or np.floor(Rover.pos[1])) == Rover.destination_point[1]
-                # We set the destination_point property to zero so that perception can find a new one
-                if x_reached and y_reached:
-                    Rover.destination_point = None
-                    print("destination_removed")
-                    print("pixel tag", Rover.memory_map[Rover.destination_point[0], Rover.destination_point[1],3])
-
-            # Check the extent of navigable terrain
-            if len(Rover.nav_angles) >= Rover.stop_forward:
-                # If mode is forward, navigable terrain looks good 
-                # and velocity is below max, then throttle 
-                if Rover.vel < Rover.max_vel:
-                    # Set throttle value to throttle setting
-                    Rover.throttle = Rover.throttle_set
-                else:  # Else coast
-                    Rover.throttle = 0
-                Rover.brake = 0
-                # Set steering to be consistent with the destination angle
-                if abs(Rover.misalignment) <= MISALIGNMENT_THRESHOLD:
-                    Rover.steer = np.clip(Rover.misalignment, -15, 15)
-                # If the difference in angles is far too different, stop the vehicle
-                elif abs(Rover.misalignment) > MISALIGNMENT_THRESHOLD:
-                    print("misalignment > threshold")
+                if Rover.path_is_blocked:
+                    # avoid obstacle if blocked, or choose a new destination
+                    print("path is blocked")
+                    # Rover.destination_point = None
                     Rover.mode = 'stop'
-            # If there's a lack of navigable terrain pixels then go to 'stop' mode
-            elif len(Rover.nav_angles) < Rover.stop_forward:
-                print("not enough nav angles available")
-                # Set mode to "stop" and hit the brakes!
-                Rover.throttle = 0
-                # Set brake to stored brake value
-                Rover.brake = Rover.brake_set
-                Rover.steer = 0
-                Rover.mode = 'stop'
+                elif Rover.path_is_blocked is False:
+                    if abs(Rover.misalignment) <= MISALIGNMENT_THRESHOLD:
+                        # and velocity is below max, then throttle
+                        if Rover.vel < Rover.max_vel:
+                            # Set throttle value to throttle setting
+                            Rover.throttle = Rover.throttle_set
+                        else:  # Else coast
+                            Rover.throttle = 0
+                        Rover.brake = 0
+                        # Set steering to be consistent with the destination angle
+                        if abs(Rover.misalignment) <= MISALIGNMENT_THRESHOLD:
+                            Rover.steer = np.clip(Rover.misalignment, -15, 15)
+                    elif Rover.misalignment > MISALIGNMENT_THRESHOLD:
+                        Rover.mode = 'stop'
+
+
+
+                        #
+                        # # Check the extent of navigable terrain
+                        # if len(Rover.nav_angles) >= Rover.stop_forward:
+                        #     # If mode is forward, navigable terrain looks good
+                        #     # and velocity is below max, then throttle
+                        #     if Rover.vel < Rover.max_vel:
+                        #         # Set throttle value to throttle setting
+                        #         Rover.throttle = Rover.throttle_set
+                        #     else:  # Else coast
+                        #         Rover.throttle = 0
+                        #     Rover.brake = 0
+                        #     # Set steering to be consistent with the destination angle
+                        #     if abs(Rover.misalignment) <= MISALIGNMENT_THRESHOLD:
+                        #         Rover.steer = np.clip(Rover.misalignment, -15, 15)
+                        #     # If the difference in angles is far too different, stop the vehicle
+                        #     elif abs(Rover.misalignment) > MISALIGNMENT_THRESHOLD:
+                        #         print("misalignment > threshold")
+                        #         Rover.mode = 'stop'
+                        # # If there's a lack of navigable terrain pixels then go to 'stop' mode
+                        # elif len(Rover.nav_angles) < Rover.stop_forward:
+                        #     print("not enough nav angles available")
+                        #     # Set mode to "stop" and hit the brakes!
+                        #     Rover.throttle = 0
+                        #     # Set brake to stored brake value
+                        #     Rover.brake = Rover.brake_set
+                        #     Rover.steer = 0
+                        #     Rover.mode = 'stop'
 
         # If we're already in "stop" mode then make different decisions
         elif Rover.mode == 'stop':
@@ -71,12 +109,45 @@ def decision_step(Rover):
             elif Rover.vel <= 0.2:
                 print("now slow")
                 # Now we're stopped
+
+                if Rover.path_is_blocked:
+                    print("path is blocked")
+
+                    path_guide = path_generation_helpers.find_waypoint(Rover.pos[0], Rover.pos[1],
+                                                                       Rover.destination_point[0],
+                                                                       Rover.destination_point[1],
+                                                                       Rover.memory_map[:, :, 3], 7,
+                                                                       5)
+
+                    # if a way has been found, assign the midpoint data to the Rover
+                    if path_guide:
+                        print("path guide ", path_guide)
+                        Rover.midpoint = (path_guide.midpoint_x, path_guide.midpoint_y)
+                        midpoint_radians = path_guide.midpoint_angle
+                        # compute the misalignment and send to the Rover
+                        Rover.midpoint_angle = midpoint_radians * (180 / np.pi)
+                        Rover.midpoint_misalignment = path_generation_helpers.compute_misalignment(
+                            Rover.midpoint_angle, Rover.yaw)
+
+                        if abs(Rover.midpoint_misalignment) <= 5:
+                            print("misalignment is less than 2")
+                            Rover.mode = 'forward'
+                        elif abs(Rover.midpoint_misalignment) > 5:
+                            print("misalignment is greater than 2")
+                            Rover.brake = 0
+                            Rover.steer = np.clip(Rover.midpoint_misalignment, -15, 15)
+                        Rover.path_is_blocked = False
+                        Rover.mode = 'forward'
+                    elif path_guide is False:
+                        print("no path")
+                        Rover.destination_point = Rover.midpoint
+
                 # Check if we are correctly aligned, and the rover is pointing to the destination
-                if abs(Rover.misalignment) <=.05:
+                elif abs(Rover.misalignment) <= 2:
                     # if yes, check if we have space in front
                     print("misalignment corrected")
                     # if the destination has been reached
-                    if (np.floor(Rover.pos[0]), np.floor(Rover.pos[1])) == (Rover.destination_point):
+                    if (np.floor(Rover.pos[0]), np.floor(Rover.pos[1])) == Rover.destination_point:
                         Rover.destination_point = None
                     # we will need a smarter way to check if we have space in frontS
                     elif len(Rover.nav_angles) >= Rover.go_forward:
@@ -93,10 +164,11 @@ def decision_step(Rover):
                     # for it to be replaced
                     else:
                         print("no space in front, emptying midpoint and destination")
-                        Rover.destination_point = None
+                        # Rover.destination_point = None
+                        Rover.destination_point = Rover.midpoint
 
                 # if we are still significantly misaligned, continue turning
-                elif abs(Rover.misalignment) > .05:
+                elif abs(Rover.misalignment) > 2:
                     print("Correcting misalignment")
                     # Make sure we're not throttling
                     Rover.throttle = 0

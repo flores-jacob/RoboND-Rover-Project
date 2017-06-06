@@ -24,8 +24,8 @@ def compute_distances(origin_x, origin_y, x_points, y_points):
 def compute_misalignment(destination_angle, yaw):
     """
 
-    :param destination_angle:
-    :param yaw:
+    :param destination_angle: value in degree
+    :param yaw: value in degrees
     :return: misalignment in degrees
     """
 
@@ -124,7 +124,8 @@ def get_range_to_iterate_over(origin_x, origin_y, destination_x, destination_y, 
         # print(" quadrant I or IV")
         # check from left to right
         range_to_iterate_over_x = np.arange(range_start_x, range_end_x, granularity)
-    elif (np.pi / 2) < abs(angle) <= ((3 * np.pi) / 4):  # or (((3 * np.pi)/ (np.pi * 2)) < abs(angle) <= (3 * np.pi)/ (np.pi * 4)):
+    elif (np.pi / 2) < abs(angle) <= (
+        (3 * np.pi) / 4):  # or (((3 * np.pi)/ (np.pi * 2)) < abs(angle) <= (3 * np.pi)/ (np.pi * 4)):
         # print("quadrant II or III")
         # if the angle is more than 90 degrees, x should be from right to left
         range_to_iterate_over_x = np.arange(range_start_x, range_end_x, granularity)[::-1]
@@ -260,7 +261,7 @@ def obstacle_crossed_by_line(origin_x, origin_y, destination_x, destination_y, m
             first_x_distance = compute_distances(origin_x, origin_y, first_obstacle_x[0], first_obstacle_x[1])
             first_y_distance = compute_distances(origin_x, origin_y, first_obstacle_y[0], first_obstacle_y[1])
             # return the closest obstacle as a list
-            if first_x_distance > first_y_distance:
+            if first_x_distance >= first_y_distance:
                 return [first_obstacle_y]
             elif first_y_distance > first_x_distance:
                 return [first_obstacle_x]
@@ -333,5 +334,63 @@ def sidestep_obstacle(origin_x, origin_y, destination_x, destination_y, map_data
                                     destination_angle)
             # if both are clear, then return the path guide
             return path_guide
+
     # if there are no clear paths, then return False
     return False
+
+
+def find_waypoint(origin_x, origin_y, destination_x, destination_y, map_data, navigable_flag, obstacle_flag):
+    assert np.ndim(map_data) == 2
+
+    # compute the distance between origin and all navigable points, and all navigable points to destination point
+    navigable_points = np.where(map_data == navigable_flag)
+
+    distance_origin_to_midpoint = compute_distances(origin_x, origin_y, navigable_points[1], navigable_points[0])
+    distance_midpoint_to_destination = compute_distances(navigable_points[1], navigable_points[0], destination_x,
+                                                         destination_y)
+
+    combined_distance = distance_origin_to_midpoint + distance_midpoint_to_destination
+
+    # find the shortest distance, but remember its original index
+    original_indices = np.argsort(combined_distance)
+
+    complete_path = []
+    midpoint_path_only = []
+
+    Path_guide = namedtuple("Path_guide",
+                            ["midpoint_x", "midpoint_y", "midpoint_distance", "midpoint_angle",
+                             "destination_distance",
+                             "destination_angle"])
+
+    for original_index in original_indices:
+        midpoint_x = np.array(navigable_points)[1, original_index]
+        midpoint_y = np.array(navigable_points)[0, original_index]
+        # check if either of the two paths are blocked
+        obstacle_crossed_part_1 = obstacle_crossed_by_line(origin_x, origin_y, midpoint_x, midpoint_y, map_data,
+                                                           [obstacle_flag])
+        obstacle_crossed_part_2 = obstacle_crossed_by_line(midpoint_x, midpoint_y, destination_x, destination_y,
+                                                           map_data, [obstacle_flag])
+
+        if (obstacle_crossed_part_1 is False) and (obstacle_crossed_part_2 is False):
+
+            midpoint_distance, midpoint_angle = to_polar_coords_with_origin(origin_x, origin_y, midpoint_x, midpoint_y)
+            destination_distance, destination_angle = to_polar_coords_with_origin(midpoint_x, midpoint_y, destination_x,
+                                                                                  destination_y)
+            path_guide = Path_guide(midpoint_x, midpoint_y, midpoint_distance, midpoint_angle, destination_distance,
+                                    destination_angle)
+
+            complete_path.append(path_guide)
+        elif obstacle_crossed_part_1 is False:
+            midpoint_distance, midpoint_angle = to_polar_coords_with_origin(origin_x, origin_y, midpoint_x, midpoint_y)
+            path_guide = Path_guide(midpoint_x, midpoint_y, midpoint_distance, midpoint_angle, None,
+                                    None)
+            midpoint_path_only.append(path_guide)
+
+    if complete_path:
+        # TODO sort the paths instead of just returning the first one
+        path_guide = complete_path[0]
+    elif midpoint_path_only:
+        path_guide = midpoint_path_only[0]
+    else:
+        path_guide = None
+    return path_guide

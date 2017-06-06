@@ -3,6 +3,8 @@ import cv2
 
 import path_generation_helpers
 
+DUMMY_DESTINATION_LIST = [(95, 87), (103, 83), (92, 75)]
+
 
 # Identify pixels above the threshold
 # Threshold of RGB > 160 does a nice job of identifying ground pixels only
@@ -674,106 +676,98 @@ def perception_step(Rover):
     Rover.nav_dists = distances
     Rover.nav_angles = angles
 
-    if Rover.destination_point is None:
-        destination_point, destination_distance, destination_radians = path_generation_helpers.choose_destination(
-            Rover.pos[0], Rover.pos[1], Rover.memory_map[:, :, 3], minimum_distance=10)
-        Rover.destination_point = destination_point
-        Rover.destination_distance = destination_distance
-        Rover.destination_angle = (destination_radians * (180/np.pi))
-    elif Rover.destination_point:
-        destination_distance, destination_radians = path_generation_helpers.to_polar_coords_with_origin(Rover.pos[0], Rover.pos[1], Rover.destination_point[0], Rover.destination_point[1])
-        Rover.destination_distance = destination_distance
-        Rover.destination_angle = (destination_radians * (180/np.pi))
+    # # If the current destination point is an obstacle, replace it with a new one
+    # if (Rover.destination_point is not None) and (
+    #             Rover.memory_map[Rover.destination_point[0], Rover.destination_point[1], 3] == 3):
+    #     Rover.destination_point = None
+    # # If the destination pont has not yet been identified as an obstacle, the compute for the polar coords ot it
+    # elif Rover.destination_point is not None:
+    #     destination_distance, destination_radians = path_generation_helpers.to_polar_coords_with_origin(Rover.pos[0],
+    #                                                                                                     Rover.pos[1],
+    #                                                                                                     Rover.destination_point[
+    #                                                                                                         0],
+    #                                                                                                     Rover.destination_point[
+    #                                                                                                         1])
+    #     Rover.destination_distance = destination_distance
+    #     Rover.destination_angle = (destination_radians * (180 / np.pi))
+    # # If there is no destination point, get one
+    # elif Rover.destination_point is None:
+    #     destination_point, destination_distance, destination_radians = path_generation_helpers.choose_destination(
+    #         Rover.pos[0], Rover.pos[1], Rover.memory_map[:, :, 3], minimum_distance=10)
+    #     Rover.destination_point = destination_point
+    #     Rover.destination_distance = destination_distance
+    #     Rover.destination_angle = (destination_radians * (180 / np.pi))
+    #     # dummy destination list
+    #     # Rover.destination_point = DUMMY_DESTINATION_LIST.pop()
 
-    Rover.misalignment = path_generation_helpers.compute_misalignment(Rover.destination_angle, Rover.yaw)
+    if Rover.destination_point:
+        __, destination_radians = path_generation_helpers.to_polar_coords_with_origin(Rover.pos[0],
+                                                            Rover.pos[1],
+                                                            Rover.destination_point[
+                                                                0],
+                                                            Rover.destination_point[
+                                                                1])
 
-    print_to_screen = "rover dest " + str(Rover.destination_point) + ", rover pos " + str(Rover.pos) + ", destination angle " + str(Rover.destination_angle) + ", yaw " + str(Rover.yaw) + ", misalignment " + str(Rover.misalignment) + ", steer " + str(Rover.steer)
+        Rover.destination_angle = (destination_radians * (180 / np.pi))
+        Rover.misalignment = path_generation_helpers.compute_misalignment(Rover.destination_angle, Rover.yaw)
+
+
+
+    # if Rover.midpoint:
+
+
+
+    # path_is_blocked = path_generation_helpers.obstacle_crossed_by_line(Rover.pos[0], Rover.pos[1],
+    #                                                                    Rover.destination_point[0],
+    #                                                                    Rover.destination_point[1],
+    #                                                                    Rover.memory_map[:, :, 3],
+    #                                                                    [5])
+    # Rover.path_is_blocked = path_is_blocked
+
+
+
+    # if path_is_blocked:
+    #     # look for a way around it
+    # path_guide = path_generation_helpers.sidestep_obstacle(Rover.pos[0], Rover.pos[1], Rover.destination_point[0],
+    #                                                        Rover.destination_point[1], Rover.memory_map[:, :, 3], 7,
+    #                                                        5)
+    #
+    # # if a way has been found, assign the midpoint data to the Rover
+    # if path_guide:
+    #     print("path guide ", path_guide)
+    #     Rover.midpoint = (path_guide.midpoint_x, path_guide.midpoint_y)
+    #     midpoint_radians = path_guide.midpoint_angle
+    #     # compute the misalignment and send to the Rover
+    #     Rover.midpoint_angle = midpoint_radians * (180 / np.pi)
+    #
+    # if Rover.midpoint_angle:
+    #
+    #     Rover.midpoint_misalignment = path_generation_helpers.compute_misalignment(Rover.midpoint_angle, Rover.yaw)
+
+    # # If not path can be found, choose a different destination
+    #     else:
+    #         Rover.destination_point = None
+    #
+    # # use the midpoint angle to navigate, if this angle is present
+    # if Rover.midpoint_angle:
+    #     Rover.misalignment = path_generation_helpers.compute_misalignment(Rover.midpoint_angle, Rover.yaw)
+    # else:
+    #     Rover.misalignment = path_generation_helpers.compute_misalignment(Rover.destination_angle, Rover.yaw)
+
+    print_to_screen = "rover dest " + str(Rover.destination_point) + ", rover pos " + str(
+        Rover.pos) + "midpoint " + str(Rover.midpoint) + "\n destination angle " + str(
+        Rover.destination_angle) + ", yaw " + str(
+        Rover.yaw) + ", misalignment " + str(Rover.misalignment) + ", midpoint angle " + str(Rover.midpoint_angle) + "midpoint misalignment " + str(Rover.midpoint_misalignment)
     print(Rover.mode)
     print(print_to_screen)
 
+    # print(path_generation_helpers.get_surrounding_values(99, 77, Rover.memory_map[:, :, 3], 2))
 
-
-
-    # for destination_pixel, angle, and distance to work, the rover has to be fully stopped. Otherwise calculations
-    # won't be accurate. Also, obstacle avoidance wouldn't work either, since if the rover has moved significantly from
-    # the original calculated origin point, the plotted path to the destination may no longer be valid
-
-
-
-
-    # print("front box ", front_box)
-    # print("left_box", Rover.left_obstacle)
-    # print("upper_left_box", Rover.upper_left_obstacle)
-
-    # 9) construct a path to follow based on mapped wall to the left. Take the average. Shift the obstacle points from
-    # the upper left hand corner into the front of the rover. Get the average position of obstacle pixels in the upper
-    # left hand corner, and project it in front of the rover to follow.
-
-    # next_point = np.mean()
-
-    # left_wall, right_wall = get_side_wall_outlines(navigable_xpix, navigable_ypix)
-
-    # left_wall = np.concatenate((left_wall, right_wall), axis=0)
-
-    # if left_wall.size > 10:
-    #     follow_path = left_wall[:, :] - np.asarray([[0, 2.5]])
-    #     next_follow_point = follow_path[0, :]
+    # destination_surrounded_by_obstacles = path_generation_helpers.get_surrounding_values(Rover.destination_point[0],
+    #                                                                                      Rover.destination_point[1],
+    #                                                                                      Rover.memory_map[:, :, 3])
     #
-    #     if next_follow_point[0] <= 25:
-    #         Rover.left_wall_continues = True
-    #         radians_to_next_follow_point = np.arctan2(next_follow_point[1], next_follow_point[0])
-    #         Rover.angle_to_next_follow_point = radians_to_next_follow_point * 180 / np.pi
-    #
-    #     elif (Rover.front_navigable is True) and (Rover.left_obstacle is False) and (Rover.upper_left_obstacle is False):
-    #         Rover.angle_to_next_follow_point = 15
-    #         Rover.left_wall_continues = False
-    #
-    #     else:
-    #         Rover.angle_to_next_follow_point = np.mean(angles) * (180/np.pi)
-    #         Rover.left_wall_continues = False
-    # else:
-    # Rover.angle_to_next_follow_point = np.mean(angles) * (180 / np.pi)
-    # Rover.angle_to_next_follow_point = (np.mean(-obstacle_angles) / 2) * (180 / np.pi)
-
-    # print("next follow point", next_follow_point)
-    # nearest_wall_point = left_wall[10, :]
-    # next_wall_point = left_wall[1, :]
-
-    # if Rover.wall_crawl_status == "wall_follow":
-    #     pass
-
-    # angle_to_nearest_wall_point = np.arctan(nearest_wall_point[1] - next_wall_point[1])/(nearest_wall_point[0] - next_wall_point[0])
-    # angle_to_nearest_wall_point = (np.arctan(nearest_wall_point[1])/(nearest_wall_point[0]))
-
-    # print("nearest angle", str(angle_to_nearest_wall_point))
-    #
-    # steering = np.clip(angle_to_nearest_wall_point, -15, 15)
-    #
-    # Rover.steer = angle_to_nearest_wall_point # steering
-
-
-    # elif Rover.wall_crawl_status == "wall_follow" and (not left_wall.size):
-    #     print("not working")
-    #     # Rover.brake = 1
-    #     Rover.throttle = 0
-    #     Rover.steer = 15
-    # elif not left_wall.size:
-    #     Rover.wall_available = False
-    # print("left wall size", left_wall.size)
-    # print("front is navigable ", Rover.front_navigable)
-    # print("front is obstacle ", Rover.front_navigable)
-    # print("left wall obstacle ", Rover.left_obstacle)
-    # print("upper left obstacle", Rover.upper_left_obstacle)
-    # print("upper right obstacle", Rover.upper_right_obstacle)
-    #
-    # print("Rover mode ", Rover.mode)
-
-    # if rock_sample_xpix.size and rock_sample_ypix.size:
-    #     angle_to_rock = path_to_visible_course((rock_sample_xpix, rock_sample_ypix))
-    #     Rover.angle_to_rock = angle_to_rock
-    # else:
-    #     Rover.angle_to_rock = 0
-
-
+    # if destination_surrounded_by_obstacles:
+    #     Rover.destination_point = None
 
     return Rover
