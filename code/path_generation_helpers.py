@@ -35,6 +35,22 @@ def compute_misalignment(destination_angle, yaw):
     return misalignment
 
 
+def coordinates_reached(current_coordinates, target_coordinates):
+    # If the x and y values of the current position rounded up or down are equivalent to
+    # the destination point:
+
+    x_range = range(round(current_coordinates[0]) - 1, round(current_coordinates[0]) + 2)
+    y_range = range(round(current_coordinates[1]) - 1, round(current_coordinates[1]) + 2)
+
+    dest_x_reached = target_coordinates[0] in x_range
+    dest_y_reached = target_coordinates[1] in y_range
+
+    if dest_x_reached and dest_y_reached:
+        return True
+    else:
+        return False
+
+
 def get_surrounding_values(x_pixel, y_pixel, map_data, radius=1):
     """
     Identify and return a pixel's value along with the values of its surrounding pixels
@@ -49,32 +65,29 @@ def get_surrounding_values(x_pixel, y_pixel, map_data, radius=1):
     return surrounding_pixels
 
 
-def choose_destination(origin_xpos, origin_ypos, map_data, minimum_distance=0):
+def choose_closest_flag(origin_x, origin_y, map_data, minimum_distance=0, flag=0):
     """
     This function returns a memory_map coordinate. The initial destination is normally chosen to be
     the nearest unexplored (untagged) point on the memory_map
 
     This may trigger the rover to first rotate 360 degrees upon initialization to survey what's in sight.
-    TODO allow the rover to choose as a destination any of the (navigable) areas it has already explored
 
-    :param origin_xpos:
-    :param origin_ypos:
-    :param map_data:
-    :param minimum_distance: Specify a minimum distance. This is to prevent the rover from constantly
-    stopping every 1 or 2 pixels after achieving its target destination
     :return: returns an (x,y) tuple of 2 integers. These is the destination's xy coordinates in the
     memory _ap.  Rover.memory_map is different from Rover.worldmap.  Rover.memory_map is 10 times
     larger (2000 x 2000 )and has more layers
+
+    TODO allow the rover to choose as a destination any of the (navigable) areas it has already explored
+
     """
 
     assert map_data.ndim == 2, " map does not have 2 dimensions "
 
-    unexplored_point_indices = np.where(map_data == 0)
+    unexplored_point_indices = np.where(map_data == flag)
 
-    x_points = unexplored_point_indices[0]
-    y_points = unexplored_point_indices[1]
+    x_points = unexplored_point_indices[1]
+    y_points = unexplored_point_indices[0]
 
-    distances, angles = to_polar_coords_with_origin(origin_xpos, origin_ypos, x_points, y_points)
+    distances, angles = to_polar_coords_with_origin(origin_x, origin_y, x_points, y_points)
 
     # Get the argmin values given a condition
     # https://seanlaw.github.io/2015/09/10/numpy-argmin-with-a-condition/
@@ -82,9 +95,11 @@ def choose_destination(origin_xpos, origin_ypos, map_data, minimum_distance=0):
     subset_idx = np.argmin(distances[mask])
     parent_idx = np.arange(distances.shape[0])[mask][subset_idx]
 
+    # distance_min_idx = np.argmin(distances)
     distance_min_idx = parent_idx
     min_distance = distances[distance_min_idx]
     accompanying_angle = angles[distance_min_idx]
+
     x_point = x_points[distance_min_idx]
     y_point = y_points[distance_min_idx]
 
@@ -92,8 +107,8 @@ def choose_destination(origin_xpos, origin_ypos, map_data, minimum_distance=0):
     chosen_destination_distance = min_distance
     chosen_destination_angle = accompanying_angle
 
-    x_diff = x_point - float(origin_xpos)
-    y_diff = y_point - float(origin_ypos)
+    x_diff = x_point - float(origin_x)
+    y_diff = y_point - float(origin_y)
 
     # logging.debug("min distance " + str(min_distance))
     # logging.debug("x_diff " + str(x_diff))
@@ -103,14 +118,14 @@ def choose_destination(origin_xpos, origin_ypos, map_data, minimum_distance=0):
     # logging.debug("accompanying_ angle " + str(accompanying_angle))
     # logging.debug("np.arctan2(float(y_diff), x_diff) " + str(np.arctan2(float(y_diff), x_diff)))
 
+    #     assert (float(min_distance ** 2) == float((x_diff ** 2) + (y_diff ** 2)))
     c_squared = min_distance ** 2
     a_squared = (x_diff ** 2)
     b_squared = (y_diff ** 2)
     assert np.isclose(c_squared, a_squared + b_squared, rtol=1e-05, atol=1e-08, equal_nan=False)
-    assert np.isclose(accompanying_angle, np.arctan2(float(y_diff), x_diff))
+    assert np.isclose((accompanying_angle), np.arctan2(float(y_diff), x_diff))
 
     return chosen_destination_coords, chosen_destination_distance, chosen_destination_angle
-
 
 def get_range_to_iterate_over(origin_x, origin_y, destination_x, destination_y, angle, granularity):
     """
@@ -148,8 +163,8 @@ def get_range_to_iterate_over(origin_x, origin_y, destination_x, destination_y, 
     return range_to_iterate_over_x, range_to_iterate_over_y
 
 
-def obstacle_crossed_by_line(origin_x, origin_y, destination_x, destination_y, map_data, flag_list, granularity=1,
-                             line_width=0, return_all=False):
+def obstacle_crossed_by_line(origin_x, origin_y, destination_x, destination_y, map_data, flag_list, granularity=1, line_width=0, return_all=False):
+
     """
     x_points: should be divisible by the granularity value, otherwise, this function won't detect it. This function
     can only detect coordinate's whose x values are divisible by the granularity value
@@ -167,8 +182,16 @@ def obstacle_crossed_by_line(origin_x, origin_y, destination_x, destination_y, m
     :param return_all: if True, all crossed obstacle coords are returned, otherwise, just the first one is returned
     :return: list of (x,y) tuples representing crossed obstacle coords
     """
+    assert (np.ndim(map_data) == 2)
 
-    assert np.ndim(map_data) == 2, "map_data is not 2 dimensional"
+    #     print("map_data_size: ", map_data.size)
+
+    #     print("destination x", destination_x)
+    #     print("desitnation y", destination_y)
+    #     print("this is the map data originally\n", map_data)
+    #     print("this is the x y value for map_data", map_data[destination_y, destination_x])
+
+    #     assert(map_data[destination_y, destination_x] == 0, "tag is " + str(map_data[destination_y, destination_x]) + " instead")
 
     # "draw" the line by getting its different elements
 
@@ -186,18 +209,21 @@ def obstacle_crossed_by_line(origin_x, origin_y, destination_x, destination_y, m
                                                                                  destination_y, angle, granularity)
 
     # if x y coords are given, check each x, y coordinate pairs from x_points y_points if they are on the line
+    #     print("outside ")
     if return_all is True:  # run the function until all flagged coordinates that cross the line are returned
+        #         print("return all is true ")
         crossed_flagged_coords_x = []
         crossed_flagged_coords_y = []
 
         # check if any of the x values between the origin and destination have y_values that are obstacles
         for x in range_to_iterate_over_x:
+            #             ("itrating over ranges ")
             y = (slope * x) + y_intercept
 
             # round up and down because numpy only accepts integers when accessing array values
             # speaking of which, it may not be possible to have a granularity that is less than one
-            y_up = np.ceil(y)
-            y_down = np.floor(y)
+            y_up = min(np.ceil(y), map_data.shape[0])
+            y_down = max(np.floor(y), 0)
             for flag in flag_list:
                 if (map_data[int(y_up), int(x)] == flag):
                     crossed_flagged_coords_x.append((int(x), int(y)))
@@ -206,8 +232,8 @@ def obstacle_crossed_by_line(origin_x, origin_y, destination_x, destination_y, m
         # do the same thing for y
         for y in range_to_iterate_over_y:
             x = (y - y_intercept) / slope
-            x_left = np.floor(x)
-            x_right = np.ceil(x)
+            x_left = max(np.floor(x), 0)
+            x_right = min(np.ceil(x), map_data.shape[1])
             for flag in flag_list:
                 if map_data[int(y), int(x_left)] == flag:
                     crossed_flagged_coords_y.append((int(x_left), int(y)))
@@ -219,20 +245,32 @@ def obstacle_crossed_by_line(origin_x, origin_y, destination_x, destination_y, m
         crossed_flagged_coords = crossed_flagged_coords_x + list(
             set(crossed_flagged_coords_y) - set(crossed_flagged_coords_x))
         # no need to proceed with the rest of the function
+        #         print(crossed_flagged_coords)
         return crossed_flagged_coords
     else:  # just return the first x or y obstacle that is encountered
         # for each flag in the list, check if they are found on the line
+        #         print("entering ")
+
         first_obstacle_x = None
         first_obstacle_y = None
+        #         print("range_to_iterate_over_y", range_to_iterate_over_y)
+        #         print("range_to_iterate_over_x", range_to_iterate_over_x)
         for x in range_to_iterate_over_x:
+            #             print("iterating x ")
             # if we already have a first obstacle, do not prceed with the loop
             if first_obstacle_x is not None:
                 break
+                #             "reaching this space x"
+                #             print("x is ", x)
+                #             print("slope", slope)
+                #             print("intercept ", y_intercept)
             y = (slope * x) + y_intercept
+            #             print("y_result ", y)
+
             # round up and down because numpy only accepts integers when accessing array values
             # speaking of which, it may not be possible to have a granularity that is less than one
-            y_up = np.ceil(y)
-            y_down = np.floor(y)
+            y_up = min(np.ceil(y), map_data.shape[0])
+            y_down = max(np.floor(y), 0)
             for flag in flag_list:
                 if (map_data[int(y_up), int(x)] == flag):
                     first_obstacle_x = (x, int(y_up))
@@ -243,17 +281,24 @@ def obstacle_crossed_by_line(origin_x, origin_y, destination_x, destination_y, m
 
         # do the same thing for y
         for y in range_to_iterate_over_y:
+            #             print("iterating y", range_to_iterate_over_y)
             # if first obstacle y is not none, break the loop
             if first_obstacle_y is not None:
                 break
+                #             print("reaching this space y")
             x = (y - y_intercept) / slope
-            x_left = np.floor(x)
-            x_right = np.ceil(x)
+
+            #             print("y source ", y)
+            #             print("y_inrercept ", y_intercept)
+            #             print("slope ", slope)
+            #             print("x result ", x)
+            x_left = max(np.floor(x), 0)
+            x_right = min(np.ceil(x), map_data.shape[1])
             for flag in flag_list:
-                if map_data[int(y), int(x_left)] == flag:
+                if (map_data[int(y), int(x_left)] == flag):
                     first_obstacle_y = (int(x_left), int(y))
                     break
-                if map_data[int(y), int(x_right)] == flag:
+                elif (map_data[int(y), int(x_right)].astype(int) == flag):
                     first_obstacle_y = (int(x_right), int(y))
                     break
         if first_obstacle_x and first_obstacle_y:
@@ -270,8 +315,9 @@ def obstacle_crossed_by_line(origin_x, origin_y, destination_x, destination_y, m
         elif first_obstacle_y:
             return [first_obstacle_y]
 
+            #         print("first obstacle x ", first_obstacle_x)
+            #         print("first obstacle y ", first_obstacle_y)
     return False
-
 
 def sidestep_obstacle(origin_x, origin_y, destination_x, destination_y, map_data, navigable_flag, obstacle_flag):
     """
@@ -293,8 +339,6 @@ def sidestep_obstacle(origin_x, origin_y, destination_x, destination_y, map_data
         destination_distance: distance from the midpoint to the destination
         destination_angle: angle from the midoint to the destination
     """
-    assert np.ndim(map_data) == 2
-
     # compute the distance between origin and all navigable points, and all navigable points to destinaion point
     navigable_points = np.where(map_data == navigable_flag)
 
@@ -305,6 +349,7 @@ def sidestep_obstacle(origin_x, origin_y, destination_x, destination_y, map_data
     combined_distance = distance_origin_to_midpoint + distance_midpoint_to_destination
 
     # find the shortest distance, but remember its original index
+
     original_indices = np.argsort(combined_distance)
 
     for original_index in original_indices:
@@ -324,8 +369,7 @@ def sidestep_obstacle(origin_x, origin_y, destination_x, destination_y, map_data
         # if not blocked, compute the polar coordinates to be sent to the rover
         if (obstacle_crossed_part_1 is False) and (obstacle_crossed_part_2 is False):
             Path_guide = namedtuple("Path_guide",
-                                    ["midpoint_x", "midpoint_y", "midpoint_distance", "midpoint_angle",
-                                     "destination_distance",
+                                    ["x", "y", "midpoint_distance", "midpoint_angle", "destination_distance",
                                      "destination_angle"])
             midpoint_distance, midpoint_angle = to_polar_coords_with_origin(origin_x, origin_y, midpoint_x, midpoint_y)
             destination_distance, destination_angle = to_polar_coords_with_origin(midpoint_x, midpoint_y, destination_x,
@@ -334,9 +378,33 @@ def sidestep_obstacle(origin_x, origin_y, destination_x, destination_y, map_data
                                     destination_angle)
             # if both are clear, then return the path guide
             return path_guide
-
     # if there are no clear paths, then return False
     return False
+
+
+def get_optimal_midpoint(origin_x, origin_y, destination_x, destination_y, map_data, navigable_flag, obstacle_flag):
+    # compute the distance between origin and all navigable points, and all navigable points to destination point
+    navigable_points = np.where(map_data == navigable_flag)
+    print("navigable len ", len(navigable_points))
+
+    distance_origin_to_midpoint = compute_distances(origin_x, origin_y, navigable_points[1], navigable_points[0])
+    print("len distance origin to midpoint ", len(distance_origin_to_midpoint))
+    distance_midpoint_to_destination = compute_distances(navigable_points[1], navigable_points[0], destination_x,
+                                                         destination_y)
+    print("len distance midpoint to destination", len(distance_midpoint_to_destination))
+
+    combined_distance = distance_origin_to_midpoint + distance_midpoint_to_destination
+
+    print("combined distance ", len(combined_distance))
+
+    # find the shortest distance, but remember its original index
+    index_with_shortest_distance = np.argmin(combined_distance)
+    if index_with_shortest_distance:
+        midpoint_x = np.array(navigable_points)[1, index_with_shortest_distance]
+        midpoint_y = np.array(navigable_points)[0, index_with_shortest_distance]
+        return (midpoint_x, midpoint_y)
+    else:
+        return None
 
 
 def find_waypoint(origin_x, origin_y, destination_x, destination_y, map_data, navigable_flag, obstacle_flag):
@@ -344,12 +412,17 @@ def find_waypoint(origin_x, origin_y, destination_x, destination_y, map_data, na
 
     # compute the distance between origin and all navigable points, and all navigable points to destination point
     navigable_points = np.where(map_data == navigable_flag)
+    # print("navigable len ", len(navigable_points))
 
     distance_origin_to_midpoint = compute_distances(origin_x, origin_y, navigable_points[1], navigable_points[0])
+    # print("len distance origin to midpoint ", len(distance_origin_to_midpoint))
     distance_midpoint_to_destination = compute_distances(navigable_points[1], navigable_points[0], destination_x,
                                                          destination_y)
+    # print("len distance midpoint to destination", len(distance_midpoint_to_destination))
 
     combined_distance = distance_origin_to_midpoint + distance_midpoint_to_destination
+
+    # print("combined distance ", len(combined_distance))
 
     # find the shortest distance, but remember its original index
     original_indices = np.argsort(combined_distance)
@@ -362,7 +435,10 @@ def find_waypoint(origin_x, origin_y, destination_x, destination_y, map_data, na
                              "destination_distance",
                              "destination_angle"])
 
+    index = 0
     for original_index in original_indices:
+        index += 1
+        # print("iterating through index ", index)
         midpoint_x = np.array(navigable_points)[1, original_index]
         midpoint_y = np.array(navigable_points)[0, original_index]
         # check if either of the two paths are blocked
@@ -372,7 +448,7 @@ def find_waypoint(origin_x, origin_y, destination_x, destination_y, map_data, na
                                                            map_data, [obstacle_flag])
 
         if (obstacle_crossed_part_1 is False) and (obstacle_crossed_part_2 is False):
-
+            # print("success1 and success2")
             midpoint_distance, midpoint_angle = to_polar_coords_with_origin(origin_x, origin_y, midpoint_x, midpoint_y)
             destination_distance, destination_angle = to_polar_coords_with_origin(midpoint_x, midpoint_y, destination_x,
                                                                                   destination_y)
@@ -381,6 +457,7 @@ def find_waypoint(origin_x, origin_y, destination_x, destination_y, map_data, na
 
             complete_path.append(path_guide)
         elif obstacle_crossed_part_1 is False:
+            # print("success1 only")
             midpoint_distance, midpoint_angle = to_polar_coords_with_origin(origin_x, origin_y, midpoint_x, midpoint_y)
             path_guide = Path_guide(midpoint_x, midpoint_y, midpoint_distance, midpoint_angle, None,
                                     None)
@@ -394,3 +471,67 @@ def find_waypoint(origin_x, origin_y, destination_x, destination_y, map_data, na
     else:
         path_guide = None
     return path_guide
+
+
+def choose_closest_unobstructed_point(origin_x, origin_y, map_data, flag_target=0, flag_obstruction=5,
+                                      minimum_distance=0):
+    # get all distances to flagged areas
+    assert map_data.ndim == 2, " map does not have 2 dimensions "
+
+    unexplored_point_indices = np.where(map_data == flag_target)
+    #     print("unexplored points", unexplored_point_indices)
+    #     print("size ", unexplored_point_indices.size)
+    #     print(map_data)
+
+    x_points = unexplored_point_indices[1]
+    y_points = unexplored_point_indices[0]
+
+    #     for index in x_points:
+    #         print("should be zero ", map_data[y_points[index], x_points[index]])
+
+    #     print("x_points ", len(x_points))
+    #     print("y_points ", len(y_points))
+
+    # compute the distances to them
+    distances = compute_distances(origin_x, origin_y, x_points, y_points)
+
+    # from lowest to highest distance, check if the path is obstructed or not
+
+    #     result = obstacle_crossed_by_line(origin_x, origin_y, x_points, y_points, map_data, [flag_obstruction])
+
+    #     distances = np.asarray([9,8,7,6,5,4,3,2,1])
+
+    # Get the argmin values given a condition
+    # https://seanlaw.github.io/2015/09/10/numpy-argmin-with-a-condition/
+    mask = (distances >= minimum_distance)
+    subset_idx = np.argsort(distances[mask])
+    parent_idx = np.arange(distances.shape[0])[mask][subset_idx]
+
+    closest_unobstructed_point_index = None
+    # once we have sorted them by their distances, we check if each point is obstructed
+    for index in parent_idx:
+        #         print("this is the index ", index)
+        #         print("x value ", x_points[index])
+        #         print("y value ", y_points[index])
+        #         print("map_data value ", map_data[y_points[index], x_points[index]])
+
+        obstruction_present = obstacle_crossed_by_line(origin_x, origin_y, x_points[index], y_points[index], map_data,
+                                                       [flag_obstruction], return_all=False)
+        if obstruction_present:
+            # if path is obstructed, do nothing
+            #             print("this is the obstruction ", obstruction_present)
+            pass
+        # if there are no obstructions, use the current index
+        elif obstruction_present is False:
+            closest_unobstructed_point_index = index
+            break
+
+    # use the obtained index of the unobstructed point to get its x and y coordinates
+    if closest_unobstructed_point_index:
+        closest_unobstructed_x_point = x_points[closest_unobstructed_point_index]
+        closest_unobstructed_y_point = y_points[closest_unobstructed_point_index]
+        closest_unobstructed_point = (closest_unobstructed_x_point, closest_unobstructed_y_point)
+    else:
+        closest_unobstructed_point = None
+
+    return closest_unobstructed_point
