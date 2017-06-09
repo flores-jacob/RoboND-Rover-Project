@@ -127,6 +127,7 @@ def choose_closest_flag(origin_x, origin_y, map_data, minimum_distance=0, flag=0
 
     return chosen_destination_coords, chosen_destination_distance, chosen_destination_angle
 
+
 def get_range_to_iterate_over(origin_x, origin_y, destination_x, destination_y, angle, granularity):
     """
     angle: in radians
@@ -140,7 +141,7 @@ def get_range_to_iterate_over(origin_x, origin_y, destination_x, destination_y, 
         # check from left to right
         range_to_iterate_over_x = np.arange(range_start_x, range_end_x, granularity)
     elif (np.pi / 2) < abs(angle) <= (
-        (3 * np.pi) / 4):  # or (((3 * np.pi)/ (np.pi * 2)) < abs(angle) <= (3 * np.pi)/ (np.pi * 4)):
+                (3 * np.pi) / 4):  # or (((3 * np.pi)/ (np.pi * 2)) < abs(angle) <= (3 * np.pi)/ (np.pi * 4)):
         # print("quadrant II or III")
         # if the angle is more than 90 degrees, x should be from right to left
         range_to_iterate_over_x = np.arange(range_start_x, range_end_x, granularity)[::-1]
@@ -163,8 +164,8 @@ def get_range_to_iterate_over(origin_x, origin_y, destination_x, destination_y, 
     return range_to_iterate_over_x, range_to_iterate_over_y
 
 
-def obstacle_crossed_by_line(origin_x, origin_y, destination_x, destination_y, map_data, flag_list, granularity=1, line_width=0, return_all=False):
-
+def obstacle_crossed_by_line(origin_x, origin_y, destination_x, destination_y, map_data, flag_list, granularity=1,
+                             line_width=0, return_all=False):
     """
     x_points: should be divisible by the granularity value, otherwise, this function won't detect it. This function
     can only detect coordinate's whose x values are divisible by the granularity value
@@ -318,6 +319,7 @@ def obstacle_crossed_by_line(origin_x, origin_y, destination_x, destination_y, m
             #         print("first obstacle x ", first_obstacle_x)
             #         print("first obstacle y ", first_obstacle_y)
     return False
+
 
 def sidestep_obstacle(origin_x, origin_y, destination_x, destination_y, map_data, navigable_flag, obstacle_flag):
     """
@@ -517,6 +519,46 @@ def choose_closest_unobstructed_point(origin_x, origin_y, map_data, flag_target=
 
         obstruction_present = obstacle_crossed_by_line(origin_x, origin_y, x_points[index], y_points[index], map_data,
                                                        [flag_obstruction], return_all=False)
+        if obstruction_present:
+            # if path is obstructed, do nothing
+            #             print("this is the obstruction ", obstruction_present)
+            pass
+        # if there are no obstructions, use the current index
+        elif obstruction_present is False:
+            closest_unobstructed_point_index = index
+            break
+
+    # use the obtained index of the unobstructed point to get its x and y coordinates
+    if closest_unobstructed_point_index:
+        closest_unobstructed_x_point = x_points[closest_unobstructed_point_index]
+        closest_unobstructed_y_point = y_points[closest_unobstructed_point_index]
+        closest_unobstructed_point = (closest_unobstructed_x_point, closest_unobstructed_y_point)
+    else:
+        closest_unobstructed_point = None
+
+    return closest_unobstructed_point
+
+
+def get_closest_accessible_navigable_point_to_destination(origin_x, origin_y, destination_x, destination_y, map_data,
+                                                          navigable_flag=7, obstacle_flag=5, minimum_distance=0):
+    assert np.ndim(map_data) == 2, "map data does not have 2 dimensions"
+
+    navigable_points = np.where(map_data[:, :] == navigable_flag)
+
+    x_points = navigable_points[1]
+    y_points = navigable_points[0]
+
+    # compute the distances of the navigable_points to the destination_point
+    distances = compute_distances(destination_x, destination_y, x_points, y_points)
+
+    # from lowest to highest distance, check if the path is obstructed from the origin or not
+    indices = np.argsort(distances)
+
+    closest_unobstructed_point_index = None
+    # once we have sorted them by their distances, we check if each point is obstructed
+    for index in indices:
+        obstruction_present = obstacle_crossed_by_line(origin_x, origin_y, x_points[index], y_points[index], map_data,
+                                                       [obstacle_flag], return_all=False)
         if obstruction_present:
             # if path is obstructed, do nothing
             #             print("this is the obstruction ", obstruction_present)
