@@ -678,3 +678,52 @@ def get_nav_points_besides_unexplored_area(map_data, x_lower_bound=None, x_upper
             unexplored_points.append((x_coordinate, y_coordinate))
     # if there are no unexplored points beside nav points, return None
     return unexplored_points
+
+
+def determine_quadrant(origin_x, origin_y, map_data):
+    half_x = map_data.shape[1] / 2
+    half_y = map_data.shape[0] / 2
+
+    if (origin_x >= half_x) and (origin_y >= half_y):
+        quadrant = 1
+    elif (origin_x < half_x) and (origin_y >= half_y):
+        quadrant = 2
+    elif (origin_x < half_x) and (origin_y < half_y):
+        quadrant = 3
+    elif (origin_x >= half_x) and (origin_y < half_y):
+        quadrant = 4
+    else:
+        raise Exception("unable to determine quadrant of coordinates")
+    return quadrant
+
+
+def get_coordinate_lower_and_upper_bounds(quadrant_number, map_data):
+    half_x = int(map_data.shape[1]/2)
+    half_y = int(map_data.shape[0]/2)
+
+    full_x = map_data[1]
+    full_y = map_data[0]
+    if quadrant_number == 1:
+        x_lower_bound = half_x
+        x_upper_bound = full_x
+        y_lower_bound = half_y
+        y_upper_bound = full_y
+    elif quadrant_number == 2:
+        x_lower_bound = 0
+        x_upper_bound = half_x
+        y_lower_bound = half_y
+        y_upper_bound = full_y
+    elif quadrant_number == 3:
+        x_lower_bound = 0
+        x_upper_bound = half_x
+        y_lower_bound = 0
+        y_upper_bound = half_y
+    elif quadrant_number == 4:
+        x_lower_bound = half_x
+        x_upper_bound = full_x
+        y_lower_bound = 0
+        y_upper_bound = half_y
+    else:
+        raise Exception("inappropriate quadrant input")
+
+    return (x_lower_bound, x_upper_bound, y_lower_bound, y_upper_bound)
