@@ -701,8 +701,8 @@ def get_coordinate_lower_and_upper_bounds(quadrant_number, map_data):
     half_x = int(map_data.shape[1]/2)
     half_y = int(map_data.shape[0]/2)
 
-    full_x = map_data[1]
-    full_y = map_data[0]
+    full_x = map_data.shape[1]
+    full_y = map_data.shape[0]
     if quadrant_number == 1:
         x_lower_bound = half_x
         x_upper_bound = full_x
