@@ -150,6 +150,10 @@ def choose_farthest_flag(origin_x, origin_y, map_data, maximum_distance=None, fl
 
     distances, angles = to_polar_coords_with_origin(origin_x, origin_y, x_points, y_points)
 
+    # if there were no points found, return None
+    if not distances.size:
+        return None, None, None
+
     if maximum_distance:
         # Get the argmin values given a condition
         # https://seanlaw.github.io/2015/09/10/numpy-argmin-with-a-condition/
@@ -179,7 +183,7 @@ def choose_farthest_flag(origin_x, origin_y, map_data, maximum_distance=None, fl
     a_squared = (x_diff ** 2)
     b_squared = (y_diff ** 2)
     assert np.isclose(c_squared, a_squared + b_squared, rtol=1e-05, atol=1e-08, equal_nan=False)
-    assert np.isclose((accompanying_angle), np.arctan2(float(y_diff), x_diff))
+    assert np.isclose(accompanying_angle, np.arctan2(float(y_diff), x_diff))
 
     return chosen_destination_coords, chosen_destination_distance, chosen_destination_angle
 
@@ -638,3 +642,39 @@ def get_closest_accessible_navigable_point_to_destination(origin_x, origin_y, de
         closest_unobstructed_point = None
 
     return closest_unobstructed_point
+
+
+def get_nav_points_besides_unexplored_area(map_data, x_lower_bound=None, x_upper_bound=None, y_lower_bound=None,
+                                           y_upper_bound=None):
+    assert map_data.ndim == 2, " map does not have 2 dimensions "
+
+    nav_flag = 7
+    unexplored_flag = 0
+
+    if x_lower_bound is None:
+        x_lower_bound = 0
+    if x_upper_bound is None:
+        x_upper_bound = map_data.shape[1]
+
+    if y_lower_bound is None:
+        y_lower_bound = 0
+    if y_upper_bound is None:
+        y_upper_bound = map_data.shape[0]
+
+        # get all the nav points in the desired area
+    flag_point_indices = np.where(map_data[y_lower_bound:y_upper_bound, x_lower_bound:x_upper_bound] == nav_flag)
+
+    x_points = flag_point_indices[1] + x_lower_bound
+    y_points = flag_point_indices[0] + y_lower_bound
+
+    unexplored_points = []
+
+    # now that we have all the nav points, let's check each one if they are beside an unexplored pixel
+    for index in range(len(x_points)):
+        x_coordinate = x_points[index]
+        y_coordinate = y_points[index]
+        surrounding_pixels = map_data[y_coordinate - 1: y_coordinate + 2, x_coordinate - 1: x_coordinate + 2]
+        if np.any(surrounding_pixels[:, :] == unexplored_flag):
+            unexplored_points.append((x_coordinate, y_coordinate))
+    # if there are no unexplored points beside nav points, return None
+    return unexplored_points
