@@ -46,6 +46,7 @@ def coordinates_reached(current_coordinates, target_coordinates):
     dest_y_reached = target_coordinates[1] in y_range
 
     if dest_x_reached and dest_y_reached:
+        print("destinaton reached ")
         return True
     else:
         return False
@@ -120,6 +121,61 @@ def choose_closest_flag(origin_x, origin_y, map_data, minimum_distance=0, flag=0
 
     #     assert (float(min_distance ** 2) == float((x_diff ** 2) + (y_diff ** 2)))
     c_squared = min_distance ** 2
+    a_squared = (x_diff ** 2)
+    b_squared = (y_diff ** 2)
+    assert np.isclose(c_squared, a_squared + b_squared, rtol=1e-05, atol=1e-08, equal_nan=False)
+    assert np.isclose((accompanying_angle), np.arctan2(float(y_diff), x_diff))
+
+    return chosen_destination_coords, chosen_destination_distance, chosen_destination_angle
+
+
+def choose_farthest_flag(origin_x, origin_y, map_data, maximum_distance=None, flag=0, x_lower_bound=None,
+                         x_upper_bound=None, y_lower_bound=None, y_upper_bound=None):
+    assert map_data.ndim == 2, " map does not have 2 dimensions "
+
+    if x_lower_bound is None:
+        x_lower_bound = 0
+    if x_upper_bound is None:
+        x_upper_bound = map_data.shape[1]
+
+    if y_lower_bound is None:
+        y_lower_bound = 0
+    if y_upper_bound is None:
+        y_upper_bound = map_data.shape[0]
+
+    flag_point_indices = np.where(map_data[y_lower_bound:y_upper_bound, x_lower_bound:x_upper_bound] == flag)
+
+    x_points = flag_point_indices[1] + x_lower_bound
+    y_points = flag_point_indices[0] + y_lower_bound
+
+    distances, angles = to_polar_coords_with_origin(origin_x, origin_y, x_points, y_points)
+
+    if maximum_distance:
+        # Get the argmin values given a condition
+        # https://seanlaw.github.io/2015/09/10/numpy-argmin-with-a-condition/
+        mask = (distances <= maximum_distance)
+        subset_idx = np.argmax(distances[mask])
+        parent_idx = np.arange(distances.shape[0])[mask][subset_idx]
+    else:
+        subset_idx = np.argmax(distances)
+        parent_idx = np.arange(distances.shape[0])[subset_idx]
+
+    # distance_min_idx = np.argmin(distances)
+    distance_max_idx = parent_idx
+    max_distance = distances[distance_max_idx]
+    accompanying_angle = angles[distance_max_idx]
+
+    x_point = x_points[distance_max_idx]
+    y_point = y_points[distance_max_idx]
+
+    chosen_destination_coords = (int(x_point), int(y_point))
+    chosen_destination_distance = max_distance
+    chosen_destination_angle = accompanying_angle
+
+    x_diff = x_point - float(origin_x)
+    y_diff = y_point - float(origin_y)
+
+    c_squared = max_distance ** 2
     a_squared = (x_diff ** 2)
     b_squared = (y_diff ** 2)
     assert np.isclose(c_squared, a_squared + b_squared, rtol=1e-05, atol=1e-08, equal_nan=False)
@@ -555,6 +611,7 @@ def get_closest_accessible_navigable_point_to_destination(origin_x, origin_y, de
     indices = np.argsort(distances)
 
     closest_unobstructed_point_index = None
+    current_closest_distance = None
     # once we have sorted them by their distances, we check if each point is obstructed
     for index in indices:
         obstruction_present = obstacle_crossed_by_line(origin_x, origin_y, x_points[index], y_points[index], map_data,
@@ -565,8 +622,12 @@ def get_closest_accessible_navigable_point_to_destination(origin_x, origin_y, de
             pass
         # if there are no obstructions, use the current index
         elif obstruction_present is False:
-            closest_unobstructed_point_index = index
-            break
+            if current_closest_distance is None:
+                current_closest_distance = distances[index]
+                closest_unobstructed_point_index = index
+            elif current_closest_distance > distances[index]:
+                current_closest_distance = distances[index]
+                closest_unobstructed_point_index = index
 
     # use the obtained index of the unobstructed point to get its x and y coordinates
     if closest_unobstructed_point_index:
