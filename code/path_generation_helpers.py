@@ -661,7 +661,7 @@ def get_nav_points_besides_unexplored_area(map_data, x_lower_bound=None, x_upper
     if y_upper_bound is None:
         y_upper_bound = map_data.shape[0]
 
-        # get all the nav points in the desired area
+    # get all the nav points in the desired area
     flag_point_indices = np.where(map_data[y_lower_bound:y_upper_bound, x_lower_bound:x_upper_bound] == nav_flag)
 
     x_points = flag_point_indices[1] + x_lower_bound
@@ -670,11 +670,18 @@ def get_nav_points_besides_unexplored_area(map_data, x_lower_bound=None, x_upper
     unexplored_points = []
 
     # now that we have all the nav points, let's check each one if they are beside an unexplored pixel
-    for index in range(len(x_points)):
+    for index in range(x_points.size):
         x_coordinate = x_points[index]
         y_coordinate = y_points[index]
-        surrounding_pixels = map_data[y_coordinate - 1: y_coordinate + 2, x_coordinate - 1: x_coordinate + 2]
-        if np.any(surrounding_pixels[:, :] == unexplored_flag):
+
+        top = map_data[y_coordinate + 1, x_coordinate]
+        bottom = map_data[y_coordinate -1, x_coordinate]
+        left = map_data[y_coordinate, x_coordinate - 1]
+        right = map_data[y_coordinate, x_coordinate + 1]
+
+        # surrounding_pixels = map_data[y_coordinate - 1: y_coordinate + 2, x_coordinate - 1: x_coordinate + 2]
+        if unexplored_flag in [top, bottom, left, right]:
+        # if np.any(surrounding_pixels[:, :] == unexplored_flag):
             unexplored_points.append((x_coordinate, y_coordinate))
     # if there are no unexplored points beside nav points, return None
     return unexplored_points
