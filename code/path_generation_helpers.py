@@ -66,7 +66,8 @@ def get_surrounding_values(x_pixel, y_pixel, map_data, radius=1):
     return surrounding_pixels
 
 
-def choose_closest_flag(origin_x, origin_y, map_data, minimum_distance=0, flag=0):
+def choose_closest_flag(origin_x, origin_y, map_data, minimum_distance=0, flag=0, x_lower_bound=None,
+                         x_upper_bound=None, y_lower_bound=None, y_upper_bound=None):
     """
     This function returns a memory_map coordinate. The initial destination is normally chosen to be
     the nearest unexplored (untagged) point on the memory_map
@@ -83,10 +84,20 @@ def choose_closest_flag(origin_x, origin_y, map_data, minimum_distance=0, flag=0
 
     assert map_data.ndim == 2, " map does not have 2 dimensions "
 
-    unexplored_point_indices = np.where(map_data == flag)
+    if x_lower_bound is None:
+        x_lower_bound = 0
+    if x_upper_bound is None:
+        x_upper_bound = map_data.shape[1]
 
-    x_points = unexplored_point_indices[1]
-    y_points = unexplored_point_indices[0]
+    if y_lower_bound is None:
+        y_lower_bound = 0
+    if y_upper_bound is None:
+        y_upper_bound = map_data.shape[0]
+
+    flag_point_indices = np.where(map_data[y_lower_bound:y_upper_bound, x_lower_bound:x_upper_bound] == flag)
+
+    x_points = flag_point_indices[1] + x_lower_bound
+    y_points = flag_point_indices[0] + y_lower_bound
 
     distances, angles = to_polar_coords_with_origin(origin_x, origin_y, x_points, y_points)
 
