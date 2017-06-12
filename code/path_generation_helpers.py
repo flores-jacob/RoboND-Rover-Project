@@ -1,6 +1,10 @@
 import numpy as np
 from collections import namedtuple
 
+from pathfinding.core.diagonal_movement import DiagonalMovement
+from pathfinding.core.grid import Grid
+from pathfinding.finder.a_star import AStarFinder
+
 
 def to_polar_coords_with_origin(origin_x, origin_y, x_pixels, y_pixels):
     y_diffs = y_pixels - float(origin_y)
@@ -67,7 +71,7 @@ def get_surrounding_values(x_pixel, y_pixel, map_data, radius=1):
 
 
 def choose_closest_flag(origin_x, origin_y, map_data, minimum_distance=0, flag=0, x_lower_bound=None,
-                         x_upper_bound=None, y_lower_bound=None, y_upper_bound=None):
+                        x_upper_bound=None, y_lower_bound=None, y_upper_bound=None):
     """
     This function returns a memory_map coordinate. The initial destination is normally chosen to be
     the nearest unexplored (untagged) point on the memory_map
@@ -277,7 +281,8 @@ def obstacle_crossed_by_line(origin_x, origin_y, destination_x, destination_y, m
 
     distance, angle = to_polar_coords_with_origin(origin_x, origin_y, destination_x, destination_y)
 
-    range_to_iterate_over_x, range_to_iterate_over_y = get_range_to_iterate_over(origin_x, origin_y, destination_x,
+    range_to_iterate_over_x, range_to_iterate_over_y = get_range_to_iterate_over(int(origin_x), int(origin_y),
+                                                                                 destination_x,
                                                                                  destination_y, angle, granularity)
 
     # if x y coords are given, check each x, y coordinate pairs from x_points y_points if they are on the line
@@ -547,17 +552,27 @@ def find_waypoint(origin_x, origin_y, destination_x, destination_y, map_data, na
 
 
 def choose_closest_unobstructed_point(origin_x, origin_y, map_data, flag_target=0, flag_obstruction=5,
-                                      minimum_distance=0):
-    # get all distances to flagged areas
+                                      minimum_distance=0, x_lower_bound=None, x_upper_bound=None, y_lower_bound=None,
+                                      y_upper_bound=None):
     assert map_data.ndim == 2, " map does not have 2 dimensions "
 
-    unexplored_point_indices = np.where(map_data == flag_target)
-    #     print("unexplored points", unexplored_point_indices)
-    #     print("size ", unexplored_point_indices.size)
-    #     print(map_data)
+    if x_lower_bound is None:
+        x_lower_bound = 0
+    if x_upper_bound is None:
+        x_upper_bound = map_data.shape[1]
 
-    x_points = unexplored_point_indices[1]
-    y_points = unexplored_point_indices[0]
+    if y_lower_bound is None:
+        y_lower_bound = 0
+    if y_upper_bound is None:
+        y_upper_bound = map_data.shape[0]
+
+    # get all distances to flagged areas
+
+    # get all the nav points in the desired area
+    flag_point_indices = np.where(map_data[y_lower_bound:y_upper_bound, x_lower_bound:x_upper_bound] == flag_target)
+
+    x_points = flag_point_indices[1] + x_lower_bound
+    y_points = flag_point_indices[0] + y_lower_bound
 
     #     for index in x_points:
     #         print("should be zero ", map_data[y_points[index], x_points[index]])
@@ -686,16 +701,88 @@ def get_nav_points_besides_unexplored_area(map_data, x_lower_bound=None, x_upper
         y_coordinate = y_points[index]
 
         top = map_data[y_coordinate + 1, x_coordinate]
-        bottom = map_data[y_coordinate -1, x_coordinate]
+        bottom = map_data[y_coordinate - 1, x_coordinate]
         left = map_data[y_coordinate, x_coordinate - 1]
         right = map_data[y_coordinate, x_coordinate + 1]
 
         # surrounding_pixels = map_data[y_coordinate - 1: y_coordinate + 2, x_coordinate - 1: x_coordinate + 2]
         if unexplored_flag in [top, bottom, left, right]:
-        # if np.any(surrounding_pixels[:, :] == unexplored_flag):
+            # if np.any(surrounding_pixels[:, :] == unexplored_flag):
             unexplored_points.append((x_coordinate, y_coordinate))
     # if there are no unexplored points beside nav points, return None
     return unexplored_points
+
+
+def get_unexplored_points_besides_navigable_areas(map_data, x_lower_bound=None, x_upper_bound=None, y_lower_bound=None,
+                                                  y_upper_bound=None, return_value="nav"):
+    assert map_data.ndim == 2, " map does not have 2 dimensions "
+
+    unexplored_flag = 0
+    nav_flag = 7
+
+    if x_lower_bound is None:
+        x_lower_bound = 0
+    if x_upper_bound is None:
+        x_upper_bound = map_data.shape[1]
+
+    if y_lower_bound is None:
+        y_lower_bound = 0
+    if y_upper_bound is None:
+        y_upper_bound = map_data.shape[0]
+
+    # get all the nav points in the desired area
+    flag_point_indices = np.where(map_data[y_lower_bound:y_upper_bound, x_lower_bound:x_upper_bound] == unexplored_flag)
+
+    x_points = flag_point_indices[1] + x_lower_bound
+    y_points = flag_point_indices[0] + y_lower_bound
+
+    unexplored_points = []
+    nav_points = []
+
+    # now that we have all the nav points, let's check each one if they are beside an unexplored pixel
+    for index in range(x_points.size):
+        x_coordinate = x_points[index]
+        y_coordinate = y_points[index]
+
+        top_x = x_coordinate
+        top_y = min(y_coordinate + 1, y_upper_bound)
+        top = map_data[top_y, top_x]
+
+        bottom_x = x_coordinate
+        bottom_y = max(y_coordinate - 1, y_lower_bound)
+        bottom = map_data[bottom_y, bottom_x]
+
+        left_x = max(x_coordinate - 1, x_lower_bound)
+        left_y = y_coordinate
+        left = map_data[left_y, left_x]
+
+        right_x = min(x_coordinate + 1, x_upper_bound)
+        right_y = y_coordinate
+        right = map_data[right_y, right_x]
+
+        if top == nav_flag:
+            unexplored_points.append((x_coordinate, y_coordinate))
+            nav_points.append((top_x, top_y))
+        elif bottom == nav_flag:
+            unexplored_points.append((x_coordinate, y_coordinate))
+            nav_points.append((bottom_x, bottom_y))
+        elif left == nav_flag:
+            unexplored_points.append((x_coordinate, y_coordinate))
+            nav_points.append((left_x, left_y))
+        elif right == nav_flag:
+            unexplored_points.append((x_coordinate, y_coordinate))
+            nav_points.append((right_x, right_y))
+
+            # if nav_flag in [top, bottom, left, right]:
+            #     unexplored_points.append((x_coordinate, y_coordinate))
+
+    # if there are no unexplored points beside nav points, return []
+    if return_value == "nav":
+        return nav_points
+    elif return_value == "unexplored":
+        return unexplored_points
+    else:
+        return nav_points, unexplored_points
 
 
 def determine_quadrant(origin_x, origin_y, map_data):
@@ -716,8 +803,8 @@ def determine_quadrant(origin_x, origin_y, map_data):
 
 
 def get_coordinate_lower_and_upper_bounds(quadrant_number, map_data):
-    half_x = int(map_data.shape[1]/2)
-    half_y = int(map_data.shape[0]/2)
+    half_x = int(map_data.shape[1] / 2)
+    half_y = int(map_data.shape[0] / 2)
 
     full_x = map_data.shape[1]
     full_y = map_data.shape[0]
@@ -745,3 +832,176 @@ def get_coordinate_lower_and_upper_bounds(quadrant_number, map_data):
         raise Exception("inappropriate quadrant input")
 
     return (x_lower_bound, x_upper_bound, y_lower_bound, y_upper_bound)
+
+
+def get_new_target(rover):
+    print("computing new target")
+
+    # code to get new target point
+    # if new target generated then continue
+    # if new target fails to generate, assign start point as target. return
+    # to the middle of the map such that we can start exploring other quadrants
+
+    # if the start position has never been assigned, assign it
+    if not rover.start_pos:
+        rover.start_pos = (int(rover.pos[0]), int(rover.pos[1]))
+
+    # initialize the first target quadrant to be the current quadrant the rover is in
+    if not rover.target_quadrant:
+        rover.target_quadrant = determine_quadrant(rover.pos[0], rover.pos[1],
+                                                   rover.memory_map[:, :, 3])
+
+    # get the x and y bounds for the current target quadrant
+    rover_x_lower, rover_x_upper, rover_y_lower, rover_y_upper = get_coordinate_lower_and_upper_bounds(
+        rover.target_quadrant, rover.memory_map[:, :, 3])
+
+    # get all the unexplored points that are next to a nav point
+    # unexplored_points_beside_nav_points = get_unexplored_points_besides_navigable_areas(rover.memory_map[:, :, 3],
+    #                                                                                     x_lower_bound=rover_x_lower,
+    #                                                                                     x_upper_bound=rover_x_upper,
+    #                                                                                     y_lower_bound=rover_y_lower,
+    #                                                                                     y_upper_bound=rover_y_upper, return_value="nav")
+    #
+    # rover_xpos = round(int(rover.pos[0]))
+    # rover_ypos = round(int(rover.pos[1]))
+
+    # # if available, get the closest one to the rover
+    # if unexplored_points_beside_nav_points:
+    #     print("found unexplored points beside nav points ", unexplored_points_beside_nav_points)
+    #     array_format = np.asarray(unexplored_points_beside_nav_points)
+    #     x_points = array_format[:, 1]
+    #     y_points = array_format[:, 0]
+    #     distances_from_rover = compute_distances(rover_xpos, rover_ypos, x_points, y_points)
+    #     closest_point_index = np.argmin(distances_from_rover)
+    #     new_target_x = x_points[closest_point_index]
+    #     new_target_y = y_points[closest_point_index]
+    # # if none, choose the nearest accessible unexplored point, and travel to it
+    # else:
+    #     # print("unexplored points beside nav points not found, looking for unobstructed unexplored points intead")
+    #     # closest_unobstructed_point = choose_closest_unobstructed_point(rover_xpos, rover_ypos,
+    #     #                                                                rover.memory_map[:, :, 3], flag_target=0,
+    #     #                                                                flag_obstruction=5, minimum_distance=0,
+    #     #                                                                x_lower_bound=rover_x_lower,
+    #     #                                                                x_upper_bound=rover_x_upper,
+    #     #                                                                y_lower_bound=rover_y_lower,
+    #     #                                                                y_upper_bound=rover_y_upper)
+    #     # if closest_unobstructed_point:
+    #     #     print("found closest unobstructed point ", closest_unobstructed_point)
+    #     #     new_target_x = closest_unobstructed_point[0]
+    #     #     new_target_y = closest_unobstructed_point[1]
+    #     # else:
+    #     print("no unobstructed points found")
+
+    new_target_x = None
+    new_target_y = None
+    if rover.return_home:
+        new_coords = choose_closest_flag(rover.start_pos[0], rover.start_pos[1], rover.memory_map[:, :, 3])[0]
+
+        if new_coords:
+            new_target_x = new_coords[0]
+            new_target_y = new_coords[1]
+        # once we've reached the starting position:
+        if coordinates_reached(rover.pos, rover.start_pos):
+            rover.return_home = False
+            # assign the next quadrant as the target
+            rover.target_quadrant = (rover.target_quadrant + 1) % 4
+
+    else:
+        new_coords = choose_farthest_flag(rover.start_pos[0], rover.start_pos[1],
+                                          rover.memory_map[:, :, 3],
+                                          flag=7, x_lower_bound=rover_x_lower,
+                                          x_upper_bound=rover_x_upper,
+                                          y_lower_bound=rover_y_lower,
+                                          y_upper_bound=rover_y_upper)[0]
+        if new_coords:
+            new_target_x = new_coords[0]
+            new_target_y = new_coords[1]
+
+    print("found new coords instead ", new_coords)
+
+    if new_target_x and new_target_y:
+        return (new_target_x, new_target_y)
+    else:
+        print("no target found ")
+        return None
+
+
+def compute_destination_points(rover):
+    print("entering loop")
+    # if we don't have any, then we get new ones
+    # 1. recheck if we can travel to destination in a straight line
+    # if there are no obstacles blocking the way to the target, then assign target as destination point
+    flag_list = [5]
+
+    path = []
+
+    obstacles = obstacle_crossed_by_line(rover.pos[0], rover.pos[1],
+                                         rover.target[0],
+                                         rover.target[1],
+                                         rover.memory_map[:, :, 3], flag_list)
+
+    if not obstacles:
+        # destination_point = rover.target
+        path = [rover.target]
+    # 2. if there are obstacles, then let's check if we can sidestep these obstacles:
+    else:
+        path_guide = sidestep_obstacle(rover.pos[0], rover.pos[1],
+                                       rover.target[0],
+                                       rover.target[1],
+                                       rover.memory_map[:, :, 3],
+                                       7, 5)
+        # if we are successful in finding a path that can sidestep, we assign the nearer point as the
+        # destination, and we queue the Rover.target point in Rover.path for later use upon reaching
+        # Rover.destination
+        if path_guide:
+            # destination_point = (path_guide.x, path_guide.y)
+            path = [rover.target, (path_guide.x, path_guide.y)]
+        # 3. if we were unable to sidestep, then we plot a path using A *
+        else:
+
+            print("attempting A *")
+
+            obstaclevalues = [5, 0]
+            matrix = np.in1d(rover.memory_map[:, :, 3].ravel(), obstaclevalues).reshape(
+                rover.memory_map[:, :, 3].shape).tolist()
+
+            grid = Grid(matrix=matrix)
+
+            start = grid.node(round(int(rover.pos[0])), round(int(rover.pos[1])))
+            end = grid.node(rover.target[0], rover.target[1])
+            print("computing A star")
+            finder = AStarFinder(diagonal_movement=DiagonalMovement.always)
+            path, runs = finder.find_path(start, end, grid)
+            print("computation finished with runs: ", runs)
+            path = list(reversed(path))
+            # if path:
+            #     print("path exists ")
+            #     # assign the current position as the destination
+            #     path.pop()
+            #     rover.destination_point = path.pop()
+            #     rover.path = path
+            # else:
+            #     print("no path found")
+            #     quadrant = rover.target_quadrant
+            #     coordinate_bounds = get_coordinate_lower_and_upper_bounds(
+            #         quadrant,
+            #         rover.memory_map[
+            #         :, :, 3])
+            #
+            #     # If no path to the target can be found, look for the closest nav point beside an unexplored point
+            #
+            #     new_coords = \
+            #         choose_closest_flag(int(rover.pos[0]),
+            #                             int(rover.pos[1]),
+            #                             rover.memory_map[:, :, 3],
+            #                             flag=7,
+            #                             x_lower_bound=coordinate_bounds[0],
+            #                             x_upper_bound=coordinate_bounds[1],
+            #                             y_lower_bound=coordinate_bounds[2],
+            #                             y_upper_bound=coordinate_bounds[3])[0]
+            #
+            #     new_target = new_coords
+            #     destination_point = new_coords
+            #     print("new coords ", new_coords)
+
+    return path
