@@ -1,9 +1,14 @@
 import numpy as np
 import path_generation_helpers
+import a_star
 
-MISALIGNMENT_THRESHOLD = 5
+MISALIGNMENT_THRESHOLD = 10
 
-DESTINATION_LIST = [(103, 75), (110, 48), (114, 7)]
+DESTINATION_LIST = [(85, 80), (76, 73), (57, 95), (13, 98), (62, 106)]
+# [(103, 75), (110, 48), (114[, 7)]
+
+OBSTACLE_FLAG = 5
+TARGET_LIST = [(200, 200), (0, 200), (200, 0), (0, 0)]
 
 
 # This is where you can build a decision tree for determining throttle, brake and steer
@@ -13,89 +18,33 @@ def decision_step(Rover):
     # Here you're all set up with some basic functionality but you'll need to
     # improve on this decision tree to do a good job of navigating autonomously!
 
-    # Check if we have a destination point plotted out, if not, stop and get a destination
-    if Rover.destination_point is None:
-        Rover.mode = 'stop'
-        Rover.destination_point = DESTINATION_LIST.pop(0)
-    elif Rover.destination_point:
-        # If the x and y values of the current position rounded up or down are equivalent to
-        # the destination point:
 
-        x_range = range(round(Rover.pos[0]) - 1, round(Rover.pos[0] + 1))
-        y_range = range(round(Rover.pos[1]) - 1, round(Rover.pos[1] + 1))
-        print("x range ", x_range)
-        print("y range ", y_range)
+    # Before the rover decides where to go and what to do, it should first check if it
+    # knows where its going
 
-        # x_reached = (np.ceil(Rover.pos[0]) or np.floor(Rover.pos[0])) == Rover.destination_point[0]
-        x_reached = Rover.destination_point[0] in x_range
-        # y_reached = (np.ceil(Rover.pos[1]) or np.floor(Rover.pos[1])) == Rover.destination_point[1]
-        y_reached = Rover.destination_point[1] in y_range
-        # We set the destination_point property to zero so that perception can find a new one
-        if x_reached and y_reached:
-            Rover.midpoint = None
-            # destination_point, __, destination_radians = path_generation_helpers.choose_destination(
-            #     Rover.pos[0], Rover.pos[1], Rover.memory_map[:, :, 3], minimum_distance=10)
-            Rover.destination_point = None
-            print("destination_replaced")
-            print("pixel tag", Rover.memory_map[Rover.destination_point[0], Rover.destination_point[1], 3])
+    # 3. Before dealing with the the decision tree, we first update our values of import
 
     # Example:
     # Check if we have vision data to make decisions with
     if Rover.nav_angles is not None:
         # Check for Rover.mode status
         if Rover.mode == 'forward':
-            # if a destination point exists
-            if Rover.destination_point:
-                print("with_destination_point")
-                if Rover.path_is_blocked:
-                    # avoid obstacle if blocked, or choose a new destination
-                    print("path is blocked")
-                    # Rover.destination_point = None
-                    Rover.mode = 'stop'
-                elif Rover.path_is_blocked is False:
-                    if abs(Rover.misalignment) <= MISALIGNMENT_THRESHOLD:
-                        # and velocity is below max, then throttle
-                        if Rover.vel < Rover.max_vel:
-                            # Set throttle value to throttle setting
-                            Rover.throttle = Rover.throttle_set
-                        else:  # Else coast
-                            Rover.throttle = 0
-                        Rover.brake = 0
-                        # Set steering to be consistent with the destination angle
-                        if abs(Rover.misalignment) <= MISALIGNMENT_THRESHOLD:
-                            Rover.steer = np.clip(Rover.misalignment, -15, 15)
-                    elif Rover.misalignment > MISALIGNMENT_THRESHOLD:
-                        Rover.mode = 'stop'
+            # if (Rover.vel < 0.1) and (Rover.throttle > .2):
+            #     Rover.mode = 'rut'
+            if abs(Rover.misalignment) <= MISALIGNMENT_THRESHOLD:
+                # and velocity is below max, then throttle
+                if Rover.vel < Rover.max_vel:
+                    # Set throttle value to throttle setting
+                    Rover.throttle = Rover.throttle_set
+                else:  # Else coast
+                    Rover.throttle = 0
+                Rover.brake = 0
+                # Set steering to be consistent with the destination angle
+                if abs(Rover.misalignment) <= MISALIGNMENT_THRESHOLD:
+                    Rover.steer = np.clip(Rover.misalignment, -15, 15)
+            elif abs(Rover.misalignment) > MISALIGNMENT_THRESHOLD:
+                Rover.mode = 'stop'
 
-
-
-                        #
-                        # # Check the extent of navigable terrain
-                        # if len(Rover.nav_angles) >= Rover.stop_forward:
-                        #     # If mode is forward, navigable terrain looks good
-                        #     # and velocity is below max, then throttle
-                        #     if Rover.vel < Rover.max_vel:
-                        #         # Set throttle value to throttle setting
-                        #         Rover.throttle = Rover.throttle_set
-                        #     else:  # Else coast
-                        #         Rover.throttle = 0
-                        #     Rover.brake = 0
-                        #     # Set steering to be consistent with the destination angle
-                        #     if abs(Rover.misalignment) <= MISALIGNMENT_THRESHOLD:
-                        #         Rover.steer = np.clip(Rover.misalignment, -15, 15)
-                        #     # If the difference in angles is far too different, stop the vehicle
-                        #     elif abs(Rover.misalignment) > MISALIGNMENT_THRESHOLD:
-                        #         print("misalignment > threshold")
-                        #         Rover.mode = 'stop'
-                        # # If there's a lack of navigable terrain pixels then go to 'stop' mode
-                        # elif len(Rover.nav_angles) < Rover.stop_forward:
-                        #     print("not enough nav angles available")
-                        #     # Set mode to "stop" and hit the brakes!
-                        #     Rover.throttle = 0
-                        #     # Set brake to stored brake value
-                        #     Rover.brake = Rover.brake_set
-                        #     Rover.steer = 0
-                        #     Rover.mode = 'stop'
 
         # If we're already in "stop" mode then make different decisions
         elif Rover.mode == 'stop':
@@ -106,66 +55,194 @@ def decision_step(Rover):
                 Rover.brake = Rover.brake_set
                 Rover.steer = 0
             # If we're not moving (vel < 0.2) then do something else
-            elif Rover.vel <= 0.2:
+            elif 0 <= Rover.vel <= 0.1:
                 print("now slow")
                 # Now we're stopped
+                Rover.brake = Rover.brake_set
 
-                if Rover.path_is_blocked:
-                    print("path is blocked")
+                with open("mymap.txt", 'w') as mapfile:
+                    mapfile.write(str(Rover.memory_map[:, :, 3].tolist()))
 
-                    path_guide = path_generation_helpers.find_waypoint(Rover.pos[0], Rover.pos[1],
-                                                                       Rover.destination_point[0],
-                                                                       Rover.destination_point[1],
-                                                                       Rover.memory_map[:, :, 3], 7,
-                                                                       5)
+                # Check if we don't have a target point. If we don't, we plan a new route
+                if not Rover.target:
+                    # code to get new target point
+                    # if new target generated then continue
+                    # if new target fails to generate, assign start point as target. return
+                    # to the middle of the map such that we can start exploring other quadrants
+                    # Rover.target = TARGET_LIST.pop()
+                    # Rover.target = \
+                    # path_generation_helpers.choose_closest_flag(Rover.pos[0], Rover.pos[1], Rover.memory_map[:, :, 3],
+                    #                                             minimum_distance=3, flag=0)[0]
 
-                    # if a way has been found, assign the midpoint data to the Rover
-                    if path_guide:
-                        print("path guide ", path_guide)
-                        Rover.midpoint = (path_guide.midpoint_x, path_guide.midpoint_y)
-                        midpoint_radians = path_guide.midpoint_angle
-                        # compute the misalignment and send to the Rover
-                        Rover.midpoint_angle = midpoint_radians * (180 / np.pi)
-                        Rover.midpoint_misalignment = path_generation_helpers.compute_misalignment(
-                            Rover.midpoint_angle, Rover.yaw)
+                    # if not Rover.start_pos:
+                    #     Rover.start_pos = (Rover.pos[0], Rover.pos[1])
+                    #
+                    # # initialize the first target quadrant to be the current quadrant the rover is in
+                    # if not Rover.target_quadrant:
+                    #     Rover.target_quadrant = path_generation_helpers.determine_quadrant(Rover.pos[0], Rover.pos[1],
+                    #                                                                        Rover.memory_map[:, :, 3])
+                    #
+                    # rover_x_lower, rover_x_upper, rover_y_lower, rover_y_upper = path_generation_helpers.get_coordinate_lower_and_upper_bounds(
+                    #     Rover.target_quadrant, Rover.memory_map[:, :, 3])
+                    #
+                    # new_coords = path_generation_helpers.choose_farthest_flag(Rover.start_pos[0], Rover.start_pos[1],
+                    #                                                           Rover.memory_map[:, :, 3],
+                    #                                                           flag=7, x_lower_bound=rover_x_lower,
+                    #                                                           x_upper_bound=rover_x_upper,
+                    #                                                           y_lower_bound=rover_y_lower,
+                    #                                                           y_upper_bound=rover_y_upper)[0]
+                    #
+                    # if not new_coords:
+                    #     print("no coordinates generated")
+                    #
+                    # # if there are no new results, then simply go to the center of the map
+                    # # if new_coords is None:
+                    # #     new_coords = (int(Rover.memory_map.shape[1]/2), int(Rover.memory_map.shape[0]/2))
 
-                        if abs(Rover.midpoint_misalignment) <= 5:
-                            print("misalignment is less than 2")
-                            Rover.mode = 'forward'
-                        elif abs(Rover.midpoint_misalignment) > 5:
-                            print("misalignment is greater than 2")
-                            Rover.brake = 0
-                            Rover.steer = np.clip(Rover.midpoint_misalignment, -15, 15)
-                        Rover.path_is_blocked = False
-                        Rover.mode = 'forward'
-                    elif path_guide is False:
-                        print("no path")
-                        Rover.destination_point = Rover.midpoint
+                    print("not target ")
+                    Rover.target = path_generation_helpers.get_new_target(Rover)
+                    path = path_generation_helpers.generate_path_points(Rover)
+                    if path:
+                        Rover.destination_point = path.pop()
+                        Rover.path = path
+                    else:
+                        Rover.destination_point = None
+                        Rover.path = []
+                # Check if we don't have destination points leading to the target
+                if Rover.target and (not Rover.destination_point) and (not Rover.path):
+                    path = path_generation_helpers.generate_path_points(Rover)
+                    if path:
+                        print("path exists ")
+                        # assign the current position as the destination
+                        # path.pop()
+                        Rover.destination_point = path.pop()
+                        Rover.path = path
+                    else:
+                        print("no path found")
+                        # quadrant = Rover.target_quadrant
+                        # coordinate_bounds = path_generation_helpers.get_coordinate_lower_and_upper_bounds(
+                        #     quadrant,
+                        #     Rover.memory_map[
+                        #     :, :, 3])
+                        #
+                        # # If no path to the target can be found, look for the closest nav point beside an unexplored
+                        # # point
+                        #
+                        # # new_coords = \
+                        # #     path_generation_helpers.choose_closest_flag(int(Rover.pos[0]),
+                        # #                         int(Rover.pos[1]),
+                        # #                         Rover.memory_map[:, :, 3],
+                        # #                         flag=7,
+                        # #                         x_lower_bound=coordinate_bounds[0],
+                        # #                         x_upper_bound=coordinate_bounds[1],
+                        # #                         y_lower_bound=coordinate_bounds[2],
+                        # #                         y_upper_bound=coordinate_bounds[3])[0]
+                        # #
+                        # # if new_coords:
+                        # #     print("new coords genereated manually ")
+                        # #     Rover.target = new_coords
+                        # # else:
+                        # #     print("new coords generated with target generation code ")
+                        # #     Rover.target = path_generation_helpers.get_new_target(Rover)
+                        Rover.target = path_generation_helpers.get_new_target(Rover)
+                        if Rover.target:
+                            path = path_generation_helpers.generate_path_points(Rover)
+                            if path:
+                                Rover.destination_point = path.pop()
+                                Rover.path = path
+                            else:
+                                Rover.destination_point = None
+                                Rover.path = []
+                ### END
+
+                # recompute angles and misalignment before dealing with rover turning and reorientation
+                if Rover.destination_point:
+                    __, destination_radians = path_generation_helpers.to_polar_coords_with_origin(
+                        Rover.pos[0],
+                        Rover.pos[1],
+                        Rover.destination_point[
+                            0],
+                        Rover.destination_point[
+                            1])
+
+                    Rover.destination_angle = (destination_radians * (180 / np.pi))
+                    Rover.misalignment = path_generation_helpers.compute_misalignment(
+                        Rover.destination_angle, Rover.yaw)
 
                 # Check if we are correctly aligned, and the rover is pointing to the destination
-                elif abs(Rover.misalignment) <= 2:
+                if abs(Rover.misalignment) <= 2:
                     # if yes, check if we have space in front
                     print("misalignment corrected")
-                    # if the destination has been reached
-                    if (np.floor(Rover.pos[0]), np.floor(Rover.pos[1])) == Rover.destination_point:
-                        Rover.destination_point = None
                     # we will need a smarter way to check if we have space in frontS
-                    elif len(Rover.nav_angles) >= Rover.go_forward:
+                    if len(Rover.nav_angles) >= Rover.go_forward:
                         print("going forward since it's free")
                         # Set throttle back to stored value
                         Rover.throttle = Rover.throttle_set
                         # Release the brake
                         Rover.brake = 0
-                        # if abs(Rover.misalignment) <= MISALIGNMENT_THRESHOLD:
                         # Set steer to mean angle
-                        # Rover.steer = np.clip(Rover.misalignment, -15, 15)
                         Rover.mode = 'forward'
                     # if there is no space in front, then we assign None to destination
                     # for it to be replaced
                     else:
-                        print("no space in front, emptying midpoint and destination")
-                        # Rover.destination_point = None
-                        Rover.destination_point = Rover.midpoint
+                        print("no space in front nothing to do, recompute path?")
+
+                        # maybe recompute path?
+
+                        # first step is to make sure that the entire quadrant has been fully explored
+                        # quadrant = path_generation_helpers.determine_quadrant(Rover.pos[0], Rover.pos[1],
+                        #                                                       Rover.memory_map[:, :, 3])
+
+                        # coordinate_bounds = path_generation_helpers.get_coordinate_lower_and_upper_bounds(
+                        #     Rover.target_quadrant,
+                        #     Rover.memory_map[
+                        #     :, :, 3])
+                        # new_destinations = path_generation_helpers.get_nav_points_besides_unexplored_area(
+                        #     Rover.memory_map[:, :, 3], x_lower_bound=coordinate_bounds[0],
+                        #     x_upper_bound=coordinate_bounds[1], y_lower_bound=coordinate_bounds[2],
+                        #     y_upper_bound=coordinate_bounds[3])
+                        #
+                        # print("these are potential new destinations ", new_destinations)
+                        #
+                        # # assign the first new destination as
+                        # if np.any(new_destinations):
+                        #     print("new destinations found, perusing the first one ", new_destinations)
+                        #     print("new destinations ", new_destinations[0])
+                        #     Rover.destination_point = tuple(new_destinations[0])
+                        #
+                        # # if the quadrant has been fully explored, then it's time to switch quadrants
+                        # else:
+                        #     print("quadrant has been fully explored")
+                        #     Rover.return_home = True
+                        #
+                        #     Rover.target = path_generation_helpers.get_new_target(Rover)
+                        #     path = path_generation_helpers.generate_path_points(Rover)
+                        #     Rover.destination_point = path.pop()
+                        #     Rover.path = path
+
+                        Rover.target = path_generation_helpers.get_new_target(Rover)
+                        path = path_generation_helpers.generate_path_points(Rover)
+                        if path:
+                            Rover.destination_point = path.pop()
+                            Rover.path = path
+                        else:
+                            Rover.destination = None
+                            Rover.path = []
+
+                        # manually assign steering values since perception.py is probably not running currently
+                        __, destination_radians = path_generation_helpers.to_polar_coords_with_origin(Rover.pos[0],
+                                                                                                      Rover.pos[1],
+                                                                                                      Rover.destination_point[
+                                                                                                          0],
+                                                                                                      Rover.destination_point[
+                                                                                                          1])
+
+                        Rover.destination_angle = (destination_radians * (180 / np.pi))
+                        Rover.misalignment = path_generation_helpers.compute_misalignment(Rover.destination_angle,
+                                                                                          Rover.yaw)
+
+                        # Rover.steer = Rover.misalignment
+
 
                 # if we are still significantly misaligned, continue turning
                 elif abs(Rover.misalignment) > 2:
@@ -176,6 +253,30 @@ def decision_step(Rover):
                     Rover.brake = 0
                     # Turn to the correct orientation
                     Rover.steer = np.clip(Rover.misalignment, -15, 15)
+        elif Rover.mode == 'rut':
+            obstacle_angles_degrees = (np.mean(Rover.obstacle_angles) * (180 / np.pi))
+            # Rover.misalignment = -obstacle_angles_degrees
+            avg_angle = np.mean(Rover.nav_angles)
+            avg_angle_degrees = avg_angle * 180 / np.pi
+            steering = np.clip(avg_angle_degrees, -15, 15)
+
+            if len(Rover.nav_angles) < Rover.go_forward:
+                Rover.throttle = 0
+                # Release the brake to allow turning
+                Rover.brake = 0
+                # Turn range is +/- 15 degrees, when stopped the next line will induce 4-wheel turning
+                Rover.steer = steering  # Could be more clever here about which way to turn
+            # If we're stopped but see sufficient navigable terrain in front then go!
+            if len(Rover.nav_angles) >= Rover.go_forward:
+                # Set throttle back to stored value
+                Rover.throttle = Rover.throttle_set
+                # Release the brake
+                Rover.brake = 0
+                # Set steer to mean angle
+                Rover.steer = steering
+                Rover.mode = 'forward'
+
+
 
     # Just to make the rover do something 
     # even if no modifications have been made to the code

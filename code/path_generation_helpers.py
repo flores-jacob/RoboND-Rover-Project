@@ -39,12 +39,18 @@ def compute_misalignment(destination_angle, yaw):
     return misalignment
 
 
-def coordinates_reached(current_coordinates, target_coordinates):
+def coordinates_reached(current_coordinates, target_coordinates, precision='tight'):
     # If the x and y values of the current position rounded up or down are equivalent to
     # the destination point:
 
-    x_range = range(round(current_coordinates[0]) - 1, round(current_coordinates[0]) + 2)
-    y_range = range(round(current_coordinates[1]) - 1, round(current_coordinates[1]) + 2)
+    if precision == 'tight':
+        x_range = [np.floor(current_coordinates[0]), np.ceil(current_coordinates[0])]
+        y_range = [np.floor(current_coordinates[1]), np.ceil(current_coordinates[1])]
+    elif precision == 'loose':
+        x_range = range(round(current_coordinates[0]) - 1, round(current_coordinates[0]) + 2)
+        y_range = range(round(current_coordinates[1]) - 1, round(current_coordinates[1]) + 2)
+    else:
+        raise Exception("incorrect precision setting. should be either 'loose' or 'tight'")
 
     dest_x_reached = target_coordinates[0] in x_range
     dest_y_reached = target_coordinates[1] in y_range
@@ -105,43 +111,46 @@ def choose_closest_flag(origin_x, origin_y, map_data, minimum_distance=0, flag=0
 
     distances, angles = to_polar_coords_with_origin(origin_x, origin_y, x_points, y_points)
 
-    # Get the argmin values given a condition
-    # https://seanlaw.github.io/2015/09/10/numpy-argmin-with-a-condition/
-    mask = (distances >= minimum_distance)
-    subset_idx = np.argmin(distances[mask])
-    parent_idx = np.arange(distances.shape[0])[mask][subset_idx]
+    if np.any(distances):
+        # Get the argmin values given a condition
+        # https://seanlaw.github.io/2015/09/10/numpy-argmin-with-a-condition/
+        mask = (distances >= minimum_distance)
+        subset_idx = np.argmin(distances[mask])
+        parent_idx = np.arange(distances.shape[0])[mask][subset_idx]
 
-    # distance_min_idx = np.argmin(distances)
-    distance_min_idx = parent_idx
-    min_distance = distances[distance_min_idx]
-    accompanying_angle = angles[distance_min_idx]
+        # distance_min_idx = np.argmin(distances)
+        distance_min_idx = parent_idx
+        min_distance = distances[distance_min_idx]
+        accompanying_angle = angles[distance_min_idx]
 
-    x_point = x_points[distance_min_idx]
-    y_point = y_points[distance_min_idx]
+        x_point = x_points[distance_min_idx]
+        y_point = y_points[distance_min_idx]
 
-    chosen_destination_coords = (int(x_point), int(y_point))
-    chosen_destination_distance = min_distance
-    chosen_destination_angle = accompanying_angle
+        chosen_destination_coords = (int(x_point), int(y_point))
+        chosen_destination_distance = min_distance
+        chosen_destination_angle = accompanying_angle
 
-    x_diff = x_point - float(origin_x)
-    y_diff = y_point - float(origin_y)
+        x_diff = x_point - float(origin_x)
+        y_diff = y_point - float(origin_y)
 
-    # logging.debug("min distance " + str(min_distance))
-    # logging.debug("x_diff " + str(x_diff))
-    # logging.debug("y-diff " + str(y_diff))
-    # logging.debug("dist ** 2 " + str((min_distance ** 2)))
-    # logging.debug("x_diff ** 2 + y_diff **2 " + str((x_diff ** 2) + (y_diff ** 2)))
-    # logging.debug("accompanying_ angle " + str(accompanying_angle))
-    # logging.debug("np.arctan2(float(y_diff), x_diff) " + str(np.arctan2(float(y_diff), x_diff)))
+        # logging.debug("min distance " + str(min_distance))
+        # logging.debug("x_diff " + str(x_diff))
+        # logging.debug("y-diff " + str(y_diff))
+        # logging.debug("dist ** 2 " + str((min_distance ** 2)))
+        # logging.debug("x_diff ** 2 + y_diff **2 " + str((x_diff ** 2) + (y_diff ** 2)))
+        # logging.debug("accompanying_ angle " + str(accompanying_angle))
+        # logging.debug("np.arctan2(float(y_diff), x_diff) " + str(np.arctan2(float(y_diff), x_diff)))
 
-    #     assert (float(min_distance ** 2) == float((x_diff ** 2) + (y_diff ** 2)))
-    c_squared = min_distance ** 2
-    a_squared = (x_diff ** 2)
-    b_squared = (y_diff ** 2)
-    assert np.isclose(c_squared, a_squared + b_squared, rtol=1e-05, atol=1e-08, equal_nan=False)
-    assert np.isclose((accompanying_angle), np.arctan2(float(y_diff), x_diff))
+        #     assert (float(min_distance ** 2) == float((x_diff ** 2) + (y_diff ** 2)))
+        c_squared = min_distance ** 2
+        a_squared = (x_diff ** 2)
+        b_squared = (y_diff ** 2)
+        assert np.isclose(c_squared, a_squared + b_squared, rtol=1e-05, atol=1e-08, equal_nan=False)
+        assert np.isclose((accompanying_angle), np.arctan2(float(y_diff), x_diff))
 
-    return chosen_destination_coords, chosen_destination_distance, chosen_destination_angle
+        return chosen_destination_coords, chosen_destination_distance, chosen_destination_angle
+    else:
+        return None, None, None
 
 
 def choose_farthest_flag(origin_x, origin_y, map_data, maximum_distance=None, flag=0, x_lower_bound=None,
@@ -191,14 +200,14 @@ def choose_farthest_flag(origin_x, origin_y, map_data, maximum_distance=None, fl
     chosen_destination_distance = max_distance
     chosen_destination_angle = accompanying_angle
 
-    x_diff = x_point - float(origin_x)
-    y_diff = y_point - float(origin_y)
-
-    c_squared = max_distance ** 2
-    a_squared = (x_diff ** 2)
-    b_squared = (y_diff ** 2)
-    assert np.isclose(c_squared, a_squared + b_squared, rtol=1e-05, atol=1e-08, equal_nan=False)
-    assert np.isclose(accompanying_angle, np.arctan2(float(y_diff), x_diff))
+    # x_diff = x_point - float(origin_x)
+    # y_diff = y_point - float(origin_y)
+    #
+    # c_squared = max_distance ** 2
+    # a_squared = (x_diff ** 2)
+    # b_squared = (y_diff ** 2)
+    # assert np.isclose(c_squared, a_squared + b_squared, rtol=1e-05, atol=1e-08, equal_nan=False)
+    # assert np.isclose(accompanying_angle, np.arctan2(float(y_diff), x_diff))
 
     return chosen_destination_coords, chosen_destination_distance, chosen_destination_angle
 
@@ -270,19 +279,19 @@ def obstacle_crossed_by_line(origin_x, origin_y, destination_x, destination_y, m
     #     assert(map_data[destination_y, destination_x] == 0, "tag is " + str(map_data[destination_y, destination_x]) + " instead")
 
     # "draw" the line by getting its different elements
+    x_diff = destination_x - float(origin_x)  # convert one of the numbers into float so that we can have more
+    y_diff = destination_y - float(origin_y)  # accurate computations, with no rounding off
 
-    # we add a small amount to the x and y diffs to avoid operations on zero values
-    x_diff = destination_x - float(origin_x) + .000001  # convert one of the numbers into float so that we can have more
-    y_diff = destination_y - float(origin_y) + .000001  # accurate computations, with no rounding off
-
-    slope = y_diff / x_diff
-
-    y_intercept = origin_y - (slope * origin_x)
+    if x_diff == 0:
+        slope = None
+        y_intercept = None
+    else:
+        slope = y_diff / x_diff
+        y_intercept = origin_y - (slope * origin_x)
 
     distance, angle = to_polar_coords_with_origin(origin_x, origin_y, destination_x, destination_y)
 
-    range_to_iterate_over_x, range_to_iterate_over_y = get_range_to_iterate_over(int(origin_x), int(origin_y),
-                                                                                 destination_x,
+    range_to_iterate_over_x, range_to_iterate_over_y = get_range_to_iterate_over(origin_x, origin_y, destination_x,
                                                                                  destination_y, angle, granularity)
 
     # if x y coords are given, check each x, y coordinate pairs from x_points y_points if they are on the line
@@ -308,7 +317,12 @@ def obstacle_crossed_by_line(origin_x, origin_y, destination_x, destination_y, m
                     crossed_flagged_coords_x.append((int(x), int(y)))
         # do the same thing for y
         for y in range_to_iterate_over_y:
-            x = (y - y_intercept) / slope
+            # if the line is vertical, assign the x_value
+            if slope is None:
+                x = origin_x
+            # if there's a slope, compute the x values
+            else:
+                x = (y - y_intercept) / slope
             x_left = max(np.floor(x), 0)
             x_right = min(np.ceil(x), map_data.shape[1])
             for flag in flag_list:
@@ -363,12 +377,17 @@ def obstacle_crossed_by_line(origin_x, origin_y, destination_x, destination_y, m
             if first_obstacle_y is not None:
                 break
                 #             print("reaching this space y")
-            x = (y - y_intercept) / slope
+            # if the line is vertical, assign the x_value
+            if slope is None:
+                x = origin_x
+            # if there's a slope, compute the x values
+            else:
+                x = (y - y_intercept) / slope
 
-            #             print("y source ", y)
-            #             print("y_inrercept ", y_intercept)
-            #             print("slope ", slope)
-            #             print("x result ", x)
+                #             print("y source ", y)
+                #             print("y_inrercept ", y_intercept)
+                #             print("slope ", slope)
+                #             print("x result ", x)
             x_left = max(np.floor(x), 0)
             x_right = min(np.ceil(x), map_data.shape[1])
             for flag in flag_list:
@@ -434,6 +453,13 @@ def sidestep_obstacle(origin_x, origin_y, destination_x, destination_y, map_data
         midpoint_x = np.array(navigable_points)[1, original_index]
         midpoint_y = np.array(navigable_points)[0, original_index]
         # check if either of the two paths are blocked
+        # print("sidestep ")
+        # print("origin x ", origin_x)
+        # print("origin y ", origin_y)
+        # print("midpoint x ", midpoint_x)
+        # print("midpoint y ", midpoint_y)
+        # print("map data shape  ", map_data.shape)
+        # print("obstacle flag ", str([obstacle_flag]))
         obstacle_crossed_part_1 = obstacle_crossed_by_line(origin_x, origin_y, midpoint_x, midpoint_y, map_data,
                                                            [obstacle_flag])
         if obstacle_crossed_part_1 is not False:
@@ -687,30 +713,29 @@ def get_nav_points_besides_unexplored_area(map_data, x_lower_bound=None, x_upper
     if y_upper_bound is None:
         y_upper_bound = map_data.shape[0]
 
-    # get all the nav points in the desired area
+        # get all the nav points in the desired area
     flag_point_indices = np.where(map_data[y_lower_bound:y_upper_bound, x_lower_bound:x_upper_bound] == nav_flag)
 
     x_points = flag_point_indices[1] + x_lower_bound
     y_points = flag_point_indices[0] + y_lower_bound
 
-    unexplored_points = []
+    x_coordinate = x_points
+    y_coordinate = y_points
 
-    # now that we have all the nav points, let's check each one if they are beside an unexplored pixel
-    for index in range(x_points.size):
-        x_coordinate = x_points[index]
-        y_coordinate = y_points[index]
+    nav_areas_beside_unexplored_point_indices = np.where(
 
-        top = map_data[y_coordinate + 1, x_coordinate]
-        bottom = map_data[y_coordinate - 1, x_coordinate]
-        left = map_data[y_coordinate, x_coordinate - 1]
-        right = map_data[y_coordinate, x_coordinate + 1]
+        (map_data[y_coordinate + 1, x_coordinate] == unexplored_flag) |
+        (map_data[y_coordinate - 1, x_coordinate] == unexplored_flag) |
+        (map_data[y_coordinate, x_coordinate - 1] == unexplored_flag) |
+        (map_data[y_coordinate, x_coordinate + 1] == unexplored_flag)
+    )
 
-        # surrounding_pixels = map_data[y_coordinate - 1: y_coordinate + 2, x_coordinate - 1: x_coordinate + 2]
-        if unexplored_flag in [top, bottom, left, right]:
-            # if np.any(surrounding_pixels[:, :] == unexplored_flag):
-            unexplored_points.append((x_coordinate, y_coordinate))
-    # if there are no unexplored points beside nav points, return None
-    return unexplored_points
+    unexplored_x = x_points[nav_areas_beside_unexplored_point_indices]
+    unexplored_y = y_points[nav_areas_beside_unexplored_point_indices]
+
+    result = np.column_stack((unexplored_x, unexplored_y))
+
+    return result
 
 
 def get_unexplored_points_besides_navigable_areas(map_data, x_lower_bound=None, x_upper_bound=None, y_lower_bound=None,
@@ -851,6 +876,8 @@ def get_new_target(rover):
         rover.target_quadrant = determine_quadrant(rover.pos[0], rover.pos[1],
                                                    rover.memory_map[:, :, 3])
 
+    # rover.target_quadrant = 3
+
     # get the x and y bounds for the current target quadrant
     rover_x_lower, rover_x_upper, rover_y_lower, rover_y_upper = get_coordinate_lower_and_upper_bounds(
         rover.target_quadrant, rover.memory_map[:, :, 3])
@@ -892,42 +919,85 @@ def get_new_target(rover):
     #     # else:
     #     print("no unobstructed points found")
 
-    new_target_x = None
-    new_target_y = None
-    if rover.return_home:
-        new_coords = choose_closest_flag(rover.start_pos[0], rover.start_pos[1], rover.memory_map[:, :, 3])[0]
+    new_target_x = round(rover.pos[0])
+    new_target_y = round(rover.pos[1])
 
-        if new_coords:
-            new_target_x = new_coords[0]
-            new_target_y = new_coords[1]
-        # once we've reached the starting position:
-        if coordinates_reached(rover.pos, rover.start_pos):
-            rover.return_home = False
-            # assign the next quadrant as the target
-            rover.target_quadrant = (rover.target_quadrant + 1) % 4
-
-    else:
+    if rover.explore_mode == 'explore':
         new_coords = choose_farthest_flag(rover.start_pos[0], rover.start_pos[1],
                                           rover.memory_map[:, :, 3],
                                           flag=7, x_lower_bound=rover_x_lower,
                                           x_upper_bound=rover_x_upper,
                                           y_lower_bound=rover_y_lower,
                                           y_upper_bound=rover_y_upper)[0]
+
         if new_coords:
             new_target_x = new_coords[0]
             new_target_y = new_coords[1]
+            print("new targets ", new_target_x, new_target_y)
 
-    print("found new coords instead ", new_coords)
+            if coordinates_reached(rover.pos, (new_target_x, new_target_y), precision="loose"):
+                # if (new_target_x, new_target_y) == rover.pos[0], rover.pos[1]:
+                rover.explore_mode = 'sweep'
 
-    if new_target_x and new_target_y:
-        return (new_target_x, new_target_y)
-    else:
-        print("no target found ")
-        return None
+    elif rover.explore_mode == 'sweep':
+        new_coords = get_nav_points_besides_unexplored_area(rover.memory_map[:, :, 3],
+                                                            x_lower_bound=rover_x_lower,
+                                                            x_upper_bound=rover_x_upper,
+                                                            y_lower_bound=rover_y_lower,
+                                                            y_upper_bound=rover_y_upper)
+
+        if np.any(new_coords):
+            print("these are the new coords ", new_coords)
+            # get the first element, or better yet, get the element closest to the rover
+            distances = compute_distances(rover.pos[0], rover.pos[1], new_coords[:, 0], new_coords[:, 1])
+
+            min_index = np.argmin(distances)
+
+            # new_coords = new_coords[0]
+            new_target_x = int(new_coords[min_index, 0])
+            new_target_y = int(new_coords[min_index, 1])
+            # rover.explore_mode = 'explore'
+        else:
+            rover.explore_mode = 'return_home'
+    elif rover.explore_mode == "return_home":
+        print("no coordinates found NONE, returning to starting point ")
+
+        # get the closest accessible nav point to the start_position
+        new_coords = choose_closest_flag(rover.start_pos[0], rover.start_pos[1], rover.memory_map[:, :, 3])[0]
+
+        if new_coords:
+            new_target_x = new_coords[0]
+            new_target_y = new_coords[1]
+        else:
+            new_target_x = rover.start_pos[0]
+            new_target_y = rover.start_pos[1]
+        # once we've reached the starting position:
+        current_coords = (round(rover.pos[0]), round(rover.pos[1]))
+        if coordinates_reached(current_coords, rover.start_pos, precision="loose"):
+            # switch quadrants to search for targets
+            if rover.target_quadrant == 1:
+                rover.target_quadrant = 2
+            elif rover.target_quadrant == 2:
+                rover.target_quadrant = 3
+            elif rover.target_quadrant == 3:
+                rover.target_quadrant = 4
+            elif rover.target_quadrant == 4:
+                rover.target_quadrant = 1
+            else:
+                print("invalid quadrant")
+
+            # once quadrants have been switched, rever to explore mode
+            rover.explore_mode = "explore"
+
+            # get a new target from the new quadrant
+            new_coords = get_new_target(rover)
+            new_target_x = new_coords[0]
+            new_target_y = new_coords[1]
+
+    return tuple((new_target_x, new_target_y))
 
 
-def compute_destination_points(rover):
-    print("entering loop")
+def generate_path_points(rover):
     # if we don't have any, then we get new ones
     # 1. recheck if we can travel to destination in a straight line
     # if there are no obstacles blocking the way to the target, then assign target as destination point
@@ -943,7 +1013,7 @@ def compute_destination_points(rover):
     if not obstacles:
         # destination_point = rover.target
         path = [rover.target]
-    # 2. if there are obstacles, then let's check if we can sidestep these obstacles:
+        # 2. if there are obstacles, then let's check if we can sidestep these obstacles:
     else:
         path_guide = sidestep_obstacle(rover.pos[0], rover.pos[1],
                                        rover.target[0],
@@ -967,41 +1037,12 @@ def compute_destination_points(rover):
 
             grid = Grid(matrix=matrix)
 
-            start = grid.node(round(int(rover.pos[0])), round(int(rover.pos[1])))
+            start = grid.node(round(rover.pos[0]), round(rover.pos[1]))
             end = grid.node(rover.target[0], rover.target[1])
             print("computing A star")
             finder = AStarFinder(diagonal_movement=DiagonalMovement.always)
             path, runs = finder.find_path(start, end, grid)
             print("computation finished with runs: ", runs)
             path = list(reversed(path))
-            # if path:
-            #     print("path exists ")
-            #     # assign the current position as the destination
-            #     path.pop()
-            #     rover.destination_point = path.pop()
-            #     rover.path = path
-            # else:
-            #     print("no path found")
-            #     quadrant = rover.target_quadrant
-            #     coordinate_bounds = get_coordinate_lower_and_upper_bounds(
-            #         quadrant,
-            #         rover.memory_map[
-            #         :, :, 3])
-            #
-            #     # If no path to the target can be found, look for the closest nav point beside an unexplored point
-            #
-            #     new_coords = \
-            #         choose_closest_flag(int(rover.pos[0]),
-            #                             int(rover.pos[1]),
-            #                             rover.memory_map[:, :, 3],
-            #                             flag=7,
-            #                             x_lower_bound=coordinate_bounds[0],
-            #                             x_upper_bound=coordinate_bounds[1],
-            #                             y_lower_bound=coordinate_bounds[2],
-            #                             y_upper_bound=coordinate_bounds[3])[0]
-            #
-            #     new_target = new_coords
-            #     destination_point = new_coords
-            #     print("new coords ", new_coords)
 
     return path

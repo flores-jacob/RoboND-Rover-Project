@@ -521,61 +521,70 @@ def perception_step(Rover):
     # 1) Define source and destination points for perspective transform
 
     image = Rover.img
+
+    # 3) Apply color threshold to identify navigable terrain/obstacles/rock samples
+    # navigable_terrain = color_thresh(warped, rgb_thresh=(160, 160, 160))
+
+    # threshold the image before warping, to avoid artifacts in the resulting image
+    nav_lower_range = (180, 180, 180)
+    nav_upper_range = (256, 256, 256)
+    navigable_terrain = color_thresh_range(image, nav_lower_range, nav_upper_range)
+
+    obstacle_lower_range = (0, 0, 0)
+    obstacle_upper_range = (179, 179, 179)
+    obstacle_terrain = color_thresh_range(image, obstacle_lower_range, obstacle_upper_range)
+
+    rock_sample_thresh = color_thresh_range(image, (110, 110, 0), (255, 255, 50))
+
     # source points
     rows, cols, ch = image.shape
     # lower 13, 140 and 303,140
     # higher 118, 95 and 200, 95
-    base_y_src = 140
-    upper_y_src = 95
-
-    # source points
-    lower_left_src = [13, base_y_src]
-    lower_right_src = [303, base_y_src]
-    upper_left_src = [118, upper_y_src]
-    upper_right_src = [200, upper_y_src]
-
-    # destination points
-    base_y_dst = 140
-    upper_y_dst = base_y_dst - 10
-    image_vert_midline = int(cols / 2)
-    x_left_dst = image_vert_midline - 5
-    x_right_dst = image_vert_midline + 5
-
-    lower_left_dst = [x_left_dst, base_y_dst]
-    lower_right_dst = [x_right_dst, base_y_dst]
-    upper_left_dst = [x_left_dst, upper_y_dst]
-    upper_right_dst = [x_right_dst, upper_y_dst]
-
-    source = np.float32([lower_left_src, lower_right_src, upper_right_src, upper_left_src])
-    destination = np.float32([lower_left_dst, lower_right_dst, upper_right_dst, upper_left_dst])
-
+    dst_size = 5
+    # Set a bottom offset to account for the fact that the bottom of the image
+    # is not the position of the rover but a bit in front of it
+    # this is just a rough guess, feel free to change it!
+    bottom_offset = 6
+    source = np.float32([[14, 140], [301, 140], [200, 96], [118, 96]])
+    destination = np.float32([[image.shape[1] / 2 - dst_size, image.shape[0] - bottom_offset],
+                              [image.shape[1] / 2 + dst_size, image.shape[0] - bottom_offset],
+                              [image.shape[1] / 2 + dst_size, image.shape[0] - 2 * dst_size - bottom_offset],
+                              [image.shape[1] / 2 - dst_size, image.shape[0] - 2 * dst_size - bottom_offset],
+                              ])
     # 2) Apply perspective transform
-    warped = perspect_transform(image, source, destination)
-    # 3) Apply color threshold to identify navigable terrain/obstacles/rock samples
-    # navigable_terrain = color_thresh(warped, rgb_thresh=(160, 160, 160))
+    warped_navigable_terrain = perspect_transform(navigable_terrain, source, destination)
+    warped_obstacle_terrain = perspect_transform(obstacle_terrain, source, destination)
+    warped_rock_sample_thresh = perspect_transform(rock_sample_thresh, source, destination)
 
-    nav_lower_range = (160, 160, 160)
-    nav_upper_range = (256, 256, 256)
-    navigable_terrain = color_thresh_range(warped, nav_lower_range, nav_upper_range)
+    # zero out the values of any obstacles found beneath the offset
+    # bottom_offset = 20
+    # obstacle_terrain[warped.shape[0] - bottom_offset:warped.shape[0], :] = obstacle_terrain[
+    #                                                                        warped.shape[0] - bottom_offset:warped.shape[
+    #                                                                            0], :] * 0
 
-    obstacle_lower_range = (0, 0, 0)
-    obstacle_upper_range = (100, 100, 100)
-    obstacle_terrain = color_thresh_range(warped, obstacle_lower_range, obstacle_upper_range)
-    rock_sample_thresh = color_thresh_range(warped, (100, 100, 0), (255, 255, 75))
+
+
+    # remove the upper part of the image. this is because what's seen further away is normally
+    # inaccurate.
+    bottom_offset = 100
+    warped_obstacle_terrain[0:bottom_offset, :] = warped_obstacle_terrain[0:bottom_offset, :] * 0
+    warped_navigable_terrain[0:bottom_offset, :] = warped_navigable_terrain[0:bottom_offset, :] * 0
+    warped_rock_sample_thresh[0:bottom_offset, :] = warped_rock_sample_thresh[0:bottom_offset, :] * 0
+
 
     # 4) Update Rover.vision_image (this will be displayed on left side of screen)
     # Example: Rover.vision_image[:,:,0] = obstacle color-thresholded binary image
     #          Rover.vision_image[:,:,1] = rock_sample color-thresholded binary image
     #          Rover.vision_image[:,:,2] = navigable terrain color-thresholded binary image
 
-    Rover.vision_image[:, :, 0] = obstacle_terrain * 255
-    Rover.vision_image[:, :, 1] = rock_sample_thresh * 255
-    Rover.vision_image[:, :, 2] = navigable_terrain * 255
+    Rover.vision_image[:, :, 0] = warped_obstacle_terrain * 255
+    Rover.vision_image[:, :, 1] = warped_rock_sample_thresh * 255
+    Rover.vision_image[:, :, 2] = warped_navigable_terrain * 255
 
     # 5) Convert map image pixel values to rover-centric coords
-    obstacle_xpix, obstacle_ypix = rover_coords(obstacle_terrain)
-    navigable_xpix, navigable_ypix = rover_coords(navigable_terrain)
-    rock_sample_xpix, rock_sample_ypix = rover_coords(rock_sample_thresh)
+    obstacle_xpix, obstacle_ypix = rover_coords(warped_obstacle_terrain)
+    navigable_xpix, navigable_ypix = rover_coords(warped_navigable_terrain)
+    rock_sample_xpix, rock_sample_ypix = rover_coords(warped_rock_sample_thresh)
 
     # 6) Convert rover-centric pixel values to world coordinates
     scale = 10
@@ -615,7 +624,7 @@ def perception_step(Rover):
     #          Rover.worldmap[rock_y_world, rock_x_world, 1] += 1
     #          Rover.worldmap[navigable_y_world, navigable_x_world, 2] += 1
 
-    if ((Rover.roll > 359) or (Rover.roll < 1)) and ((Rover.pitch > 359) or (Rover.pitch < 1)):
+    if ((Rover.roll > 359.5) or (Rover.roll < 0.5)) and ((Rover.pitch > 359.5) or (Rover.pitch < 0.5)):
         Rover.worldmap[obstacle_y_world, obstacle_x_world, 0] = 255
         Rover.worldmap[rock_sample_y_world, rock_sample_x_world, 1] = 255
         Rover.worldmap[y_world, x_world, 2] = 255
@@ -676,98 +685,102 @@ def perception_step(Rover):
     Rover.nav_dists = distances
     Rover.nav_angles = angles
 
-    # # If the current destination point is an obstacle, replace it with a new one
-    # if (Rover.destination_point is not None) and (
-    #             Rover.memory_map[Rover.destination_point[0], Rover.destination_point[1], 3] == 3):
-    #     Rover.destination_point = None
-    # # If the destination pont has not yet been identified as an obstacle, the compute for the polar coords ot it
-    # elif Rover.destination_point is not None:
-    #     destination_distance, destination_radians = path_generation_helpers.to_polar_coords_with_origin(Rover.pos[0],
-    #                                                                                                     Rover.pos[1],
-    #                                                                                                     Rover.destination_point[
-    #                                                                                                         0],
-    #                                                                                                     Rover.destination_point[
-    #                                                                                                         1])
-    #     Rover.destination_distance = destination_distance
-    #     Rover.destination_angle = (destination_radians * (180 / np.pi))
-    # # If there is no destination point, get one
-    # elif Rover.destination_point is None:
-    #     destination_point, destination_distance, destination_radians = path_generation_helpers.choose_destination(
-    #         Rover.pos[0], Rover.pos[1], Rover.memory_map[:, :, 3], minimum_distance=10)
-    #     Rover.destination_point = destination_point
-    #     Rover.destination_distance = destination_distance
-    #     Rover.destination_angle = (destination_radians * (180 / np.pi))
-    #     # dummy destination list
-    #     # Rover.destination_point = DUMMY_DESTINATION_LIST.pop()
+    Rover.obstacle_angles = obstacle_angles
+
+    # 1. check if the rover has a long term target
+    if Rover.target:
+        print("ROver target ", Rover.target)
+        # if it has a target, check if the target has been reached
+        # precision here is loose, as opposed to tight in destination points
+        # this is because it's more necessay to actually reach the exact targets in the
+        # destination point to avoid getting "snagged" on obstacles due to premature turning
+        if path_generation_helpers.coordinates_reached(Rover.pos, Rover.target, precision="loose"):
+            # if reached, remove previous target
+            # and stop the rover so that it can plan where to go next
+            Rover.reached_targets.append(Rover.target)
+            Rover.target = None
+            # Rover.destination = None
+            Rover.mode = 'stop'
+        # if the target has been seen and has been identified as an obstacle, remove it
+        elif Rover.memory_map[Rover.target[1], Rover.target[0], 3] == 5:
+            Rover.target = None
+            Rover.mode = 'stop'
+    # if there is no target, stop to get a new target
+    elif Rover.target is None:
+        # stop the rover.  we need to plan where to go before moving once again
+        Rover.mode = 'stop'
+
+    # 2. check if the rover has a short term destination, leading to the target
+    if Rover.destination_point:
+        # if the destination exists, check if it has been reached
+        if path_generation_helpers.coordinates_reached(Rover.pos, Rover.destination_point, precision='tight'):
+            # if reached, check if we have any new destination_points lined up
+            if Rover.path:
+                # if we have, we take the last on on the list, and assign it as the destination
+                Rover.destination_point = Rover.path.pop()
+            # otherwise stop the rover to plan where to go next
+            else:
+                Rover.destination_point = None
+                Rover.mode = 'stop'
+        # if the destination point has been discovered to be an obstacle, stop the rover
+        elif Rover.memory_map[Rover.destination_point[1], Rover.destination_point[0], 3] == 5:
+            Rover.destination_point = None
+            Rover.mode = 'stop'
+        # if the destination has not yet been reached, check if we can travel to it in a straight line
+        else:
+            # list of flags that are considered to be obstacles
+            flag_list = [5]
+            # check there are obstacles between the rovers position and the destination
+            obstacles = path_generation_helpers.obstacle_crossed_by_line(Rover.pos[0], Rover.pos[1],
+                                                                         Rover.destination_point[0],
+                                                                         Rover.destination_point[1],
+                                                                         Rover.memory_map[:, :, 3], flag_list)
+            print("obstacles found but ignoring")
+            # # if there are obstacles, stop the rover, and plan where to go next
+            # if obstacles:
+            #     Rover.destination_point = None
+            #     Rover.path = []
+            #     Rover.mode = 'stop'
+            # # if there are no obstacles, continue on our merry way
+            # elif obstacles is False:
+            #     pass
+    # if there is no destination point:
+    else:
+        # check if we have destination_points queued up
+        if Rover.path:
+            print("popping path")
+            Rover.destination_point = Rover.path.pop()
+        # otherwise, we stop the rover to plan where to go next
+        else:
+            Rover.destination_point = None
+            Rover.mode = 'stop'
 
     if Rover.destination_point:
         __, destination_radians = path_generation_helpers.to_polar_coords_with_origin(Rover.pos[0],
-                                                            Rover.pos[1],
-                                                            Rover.destination_point[
-                                                                0],
-                                                            Rover.destination_point[
-                                                                1])
+                                                                                      Rover.pos[1],
+                                                                                      Rover.destination_point[
+                                                                                          0],
+                                                                                      Rover.destination_point[
+                                                                                          1])
 
         Rover.destination_angle = (destination_radians * (180 / np.pi))
         Rover.misalignment = path_generation_helpers.compute_misalignment(Rover.destination_angle, Rover.yaw)
 
-
-
-    # if Rover.midpoint:
-
-
-
-    # path_is_blocked = path_generation_helpers.obstacle_crossed_by_line(Rover.pos[0], Rover.pos[1],
-    #                                                                    Rover.destination_point[0],
-    #                                                                    Rover.destination_point[1],
-    #                                                                    Rover.memory_map[:, :, 3],
-    #                                                                    [5])
-    # Rover.path_is_blocked = path_is_blocked
-
-
-
-    # if path_is_blocked:
-    #     # look for a way around it
-    # path_guide = path_generation_helpers.sidestep_obstacle(Rover.pos[0], Rover.pos[1], Rover.destination_point[0],
-    #                                                        Rover.destination_point[1], Rover.memory_map[:, :, 3], 7,
-    #                                                        5)
-    #
-    # # if a way has been found, assign the midpoint data to the Rover
-    # if path_guide:
-    #     print("path guide ", path_guide)
-    #     Rover.midpoint = (path_guide.midpoint_x, path_guide.midpoint_y)
-    #     midpoint_radians = path_guide.midpoint_angle
-    #     # compute the misalignment and send to the Rover
-    #     Rover.midpoint_angle = midpoint_radians * (180 / np.pi)
-    #
-    # if Rover.midpoint_angle:
-    #
-    #     Rover.midpoint_misalignment = path_generation_helpers.compute_misalignment(Rover.midpoint_angle, Rover.yaw)
-
-    # # If not path can be found, choose a different destination
-    #     else:
-    #         Rover.destination_point = None
-    #
-    # # use the midpoint angle to navigate, if this angle is present
-    # if Rover.midpoint_angle:
-    #     Rover.misalignment = path_generation_helpers.compute_misalignment(Rover.midpoint_angle, Rover.yaw)
-    # else:
-    #     Rover.misalignment = path_generation_helpers.compute_misalignment(Rover.destination_angle, Rover.yaw)
-
-    print_to_screen = "rover dest " + str(Rover.destination_point) + ", rover pos " + str(
-        Rover.pos) + "midpoint " + str(Rover.midpoint) + "\n destination angle " + str(
+    # print_to_screen = "rover dest " + str(Rover.destination_point) + ", rover pos " + str(
+    #     Rover.pos) + "midpoint " + str(Rover.midpoint) + "\n destination angle " + str(
+    #     Rover.destination_angle) + ", yaw " + str(
+    #     Rover.yaw) + ", misalignment " + str(Rover.misalignment) + ", midpoint angle " + str(
+    #     Rover.midpoint_angle) + "midpoint misalignment " + str(Rover.midpoint_misalignment)
+    print_to_screen = "rover target " + str(Rover.target) + ", rover dest " + str(
+        Rover.destination_point) + ", rover pos " + str(
+        Rover.pos) + "\n destination angle " + str(
         Rover.destination_angle) + ", yaw " + str(
-        Rover.yaw) + ", misalignment " + str(Rover.misalignment) + ", midpoint angle " + str(Rover.midpoint_angle) + "midpoint misalignment " + str(Rover.midpoint_misalignment)
+        Rover.yaw) + ", misalignment " + str(Rover.misalignment)
+
     print(Rover.mode)
+    print(Rover.explore_mode)
+    print("target quadrant ", Rover.target_quadrant)
+    print("path length ", len(Rover.path))
     print(print_to_screen)
-
-    # print(path_generation_helpers.get_surrounding_values(99, 77, Rover.memory_map[:, :, 3], 2))
-
-    # destination_surrounded_by_obstacles = path_generation_helpers.get_surrounding_values(Rover.destination_point[0],
-    #                                                                                      Rover.destination_point[1],
-    #                                                                                      Rover.memory_map[:, :, 3])
-    #
-    # if destination_surrounded_by_obstacles:
-    #     Rover.destination_point = None
 
     return Rover

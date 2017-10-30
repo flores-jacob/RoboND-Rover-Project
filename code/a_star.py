@@ -175,6 +175,14 @@ def heuristic(a, b):
 
 
 def a_star_search(graph, start, goal):
+    # print("inside ")
+    # print("graph ", graph)
+    # print("graph type ", type(graph))
+    # print("start ", start)
+    # print("start type ", type(start))
+    # print("goal ", goal)
+    # print("goal type ", type(goal))
+
     frontier = PriorityQueue()
     frontier.put(start, 0)
     came_from = {}
@@ -182,18 +190,66 @@ def a_star_search(graph, start, goal):
     came_from[start] = None
     cost_so_far[start] = 0
 
+    index = 0
     while not frontier.empty():
+        # print("frontier ", frontier)
+        # print("len frontier", len(frontier.elements))
+        # print("inside while loop")
         current = frontier.get()
 
-        if current == goal:
-            break
+        # print("current ", current)
+        # print("current type ", type(current))
 
+        # print("out current ", current)
+        # print("goal ", goal)
+
+        if current == goal:
+            # print("current equal", current)
+            # print("goal equal", goal)
+            break
+        index += 1
+        # print("index ", index)
+        # print("for index ")
+        for_index = 0
         for next in graph.neighbors(current):
+            for_index += 1
+            # print("inside for loop")
             new_cost = cost_so_far[current] + graph.cost(current, next)
             if next not in cost_so_far or new_cost < cost_so_far[next]:
                 cost_so_far[next] = new_cost
                 priority = new_cost + heuristic(goal, next)
                 frontier.put(next, priority)
                 came_from[next] = current
+                # print (for_index)
 
     return came_from, cost_so_far
+
+
+# implementation from https://stackoverflow.com/questions/4159331/python-speed-up-an-a-star-pathfinding-algorithm
+def aStar(graph, current, end):
+    openList = set()
+    closedList = set()
+
+    def retracePath(c):
+        def parentgen(c):
+            while c:
+                yield c
+                c = c.parent
+
+        result = [element for element in parentgen(c)]
+        result.reverse()
+        return result
+
+    openList.add(current)
+    while openList:
+        current = sorted(openList, key=lambda inst: inst.H)[0]
+        if current == end:
+            return retracePath(current)
+        openList.remove(current)
+        closedList.add(current)
+        for tile in graph[current]:
+            if tile not in closedList:
+                tile.H = (abs(end.x - tile.x) + abs(end.y - tile.y)) * 10
+                openList.add(tile)
+                tile.parent = current
+    return []
