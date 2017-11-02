@@ -43,6 +43,14 @@ def color_thresh_range(img, rgb_lower, rgb_higher):
     return color_select
 
 
+def hsv_color_thresh_range(img, hsv_lower, hsv_higher):
+    # convert rgb image to hsv
+    converted = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+
+    color_select = color_thresh_range(converted, hsv_lower, hsv_higher)
+    return color_select
+
+
 # Define a function to convert to rover-centric coordinates
 def rover_coords(binary_img):
     # Identify nonzero pixels
@@ -530,9 +538,18 @@ def perception_step(Rover):
     nav_upper_range = (256, 256, 256)
     navigable_terrain = color_thresh_range(image, nav_lower_range, nav_upper_range)
 
+    nav_lower_range_hsv = (0, 0, 200)
+    nav_higher_range_hsv = (255, 255, 2000)
+    navigable_terrain = hsv_color_thresh_range(image, nav_lower_range_hsv, nav_higher_range_hsv)
+
+
     obstacle_lower_range = (0, 0, 0)
     obstacle_upper_range = (179, 179, 179)
     obstacle_terrain = color_thresh_range(image, obstacle_lower_range, obstacle_upper_range)
+
+    obstacle_lower_range_hsv = (0, 0, 0)
+    obstacle_upper_range_hsv = (255,255,199)
+    obstacle_terrain = hsv_color_thresh_range(image, obstacle_lower_range_hsv, obstacle_upper_range_hsv)
 
     rock_sample_thresh = color_thresh_range(image, (110, 110, 0), (255, 255, 50))
 
