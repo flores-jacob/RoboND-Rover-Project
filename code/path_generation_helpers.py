@@ -937,28 +937,28 @@ def get_new_target(rover):
 
             if coordinates_reached(rover.pos, (new_target_x, new_target_y), precision="loose"):
                 # if (new_target_x, new_target_y) == rover.pos[0], rover.pos[1]:
-                rover.explore_mode = 'sweep'
+                rover.explore_mode = 'return_home'
 
-    elif rover.explore_mode == 'sweep':
-        new_coords = get_nav_points_besides_unexplored_area(rover.memory_map[:, :, 3],
-                                                            x_lower_bound=rover_x_lower,
-                                                            x_upper_bound=rover_x_upper,
-                                                            y_lower_bound=rover_y_lower,
-                                                            y_upper_bound=rover_y_upper)
-
-        if np.any(new_coords):
-            print("these are the new coords ", new_coords)
-            # get the first element, or better yet, get the element closest to the rover
-            distances = compute_distances(rover.pos[0], rover.pos[1], new_coords[:, 0], new_coords[:, 1])
-
-            min_index = np.argmin(distances)
-
-            # new_coords = new_coords[0]
-            new_target_x = int(new_coords[min_index, 0])
-            new_target_y = int(new_coords[min_index, 1])
-            # rover.explore_mode = 'explore'
-        else:
-            rover.explore_mode = 'return_home'
+    # elif rover.explore_mode == 'sweep':
+    #     new_coords = get_nav_points_besides_unexplored_area(rover.memory_map[:, :, 3],
+    #                                                         x_lower_bound=rover_x_lower,
+    #                                                         x_upper_bound=rover_x_upper,
+    #                                                         y_lower_bound=rover_y_lower,
+    #                                                         y_upper_bound=rover_y_upper)
+    #
+    #     if np.any(new_coords):
+    #         print("these are the new coords ", new_coords)
+    #         # get the first element, or better yet, get the element closest to the rover
+    #         distances = compute_distances(rover.pos[0], rover.pos[1], new_coords[:, 0], new_coords[:, 1])
+    #
+    #         min_index = np.argmin(distances)
+    #
+    #         # new_coords = new_coords[0]
+    #         new_target_x = int(new_coords[min_index, 0])
+    #         new_target_y = int(new_coords[min_index, 1])
+    #         # rover.explore_mode = 'explore'
+    #     else:
+    #         rover.explore_mode = 'return_home'
     elif rover.explore_mode == "return_home":
         print("no coordinates found NONE, returning to starting point ")
 
