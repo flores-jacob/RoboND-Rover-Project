@@ -1,10 +1,13 @@
 import path_generation_helpers
 import numpy as np
-from decision import MISALIGNMENT_THRESHOLD
+
+MISALIGNMENT_THRESHOLD = 10
+
 
 class State:
     def run(self, rover_object):
         assert 0, "run not implemented"
+
     def next(self, rover_object):
         assert 0, "next not implemented"
 
@@ -13,6 +16,7 @@ class StateMachine:
     def __init__(self, initialState):
         self.currentState = initialState
         self.next_step = self.currentState.run()
+
     # Template method:
     def runAll(self, inputs):
         for i in inputs:
@@ -20,7 +24,7 @@ class StateMachine:
             self.currentState = self.currentState.next(i)
             self.currentState.run()
 
-    # def proceed_to_next_step(self):
+            # def proceed_to_next_step(self):
 
 
 DESIGNATING_TARGET = "designating target"
@@ -30,6 +34,7 @@ STOPPING = "stopping rover"
 STOPPED = "rover stopped"
 MOVING_FORWARD = "moving forward"
 REORIENTING = "reorienting rover"
+
 
 # def stateswitch(state):
 #     if state == DESIGNATING_TARGET:
@@ -71,9 +76,11 @@ class MovingForward(State):
         self.run_status = MOVING_FORWARD
 
     def run(self, rover_object):
-        # if (Rover.vel < 0.1) and (Rover.throttle > .2):
-        #     Rover.mode = 'rut'
-        if abs(rover_object.misalignment) <= MISALIGNMENT_THRESHOLD:
+        if not rover_object.target:
+            self.run_status = STOPPING
+        elif not rover_object.destination_point:
+            self.run_status = STOPPING
+        elif abs(rover_object.misalignment) <= MISALIGNMENT_THRESHOLD:
             # and velocity is below max, then throttle
             if rover_object.vel < rover_object.max_vel:
                 # Set throttle value to throttle setting
@@ -125,8 +132,11 @@ class Reorienting(State):
         self.reorient_status = REORIENTING
 
     def run(self, rover_object):
+        if not rover_object.target:
+            self.reorient_status = DESIGNATING_TARGET
+
         # recompute angles and misalignment before dealing with rover turning and reorientation
-        if rover_object.destination_point:
+        elif rover_object.destination_point:
             __, destination_radians = path_generation_helpers.to_polar_coords_with_origin(
                 rover_object.pos[0],
                 rover_object.pos[1],
@@ -169,14 +179,12 @@ class Reorienting(State):
                 # Turn to the correct orientation
                 rover_object.steer = np.clip(rover_object.misalignment, -15, 15)
                 self.reorient_status = REORIENTING
-            
+
         else:
             self.reorient_status = GENERATING_PATH_TO_TARGET
 
     def next(self, rover_object):
         return self.reorient_status
-
-
 
 
 def stateswitch(state):

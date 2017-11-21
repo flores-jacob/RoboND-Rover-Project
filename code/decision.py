@@ -5,7 +5,6 @@ import a_star
 import rover_state_machine
 
 
-MISALIGNMENT_THRESHOLD = 10
 
 DESTINATION_LIST = [(85, 80), (76, 73), (57, 95), (13, 98), (62, 106)]
 # [(103, 75), (110, 48), (114[, 7)]
