@@ -102,8 +102,6 @@ Once the input image has been processed to identify which parts are to be consid
 ### Autonomous Navigation and Mapping
 
 #### perception_step() and decision_step(): code and functionality
-Fill in the perception_step() (at the bottom of the perception.py script) and decision_step() (in decision.py) functions in the autonomous mapping scripts and an explanation is provided in the writeup of how and why these functions were modified as they were.
-
 **Perception Step**
 
 For the perception step, we basically followed the steps we outlined above, with a couple of minor modifications.  The first modification is to only process images when the rover is fairly horizontal or flat against the ground, that is, when roll and pitch values are do not exceed +-0.5 degrees from zero. This can be seen in lines 191 to 194 of `perception.py`. The code is reproduced below.
